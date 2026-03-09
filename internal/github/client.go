@@ -186,3 +186,46 @@ func (c *Client) DecodeContent(content *ContentResponse) ([]byte, error) {
 	}
 	return base64.StdEncoding.DecodeString(content.Content)
 }
+
+type DeleteRequest struct {
+	Message string `json:"message"`
+	Sha     string `json:"sha"`
+	Branch  string `json:"branch,omitempty"`
+}
+
+func (c *Client) DeleteContent(ctx context.Context, owner, repo, path, sha string) error {
+	url := fmt.Sprintf("%s/repos/%s/%s/contents/%s", c.BaseURL, owner, repo, path)
+
+	req := DeleteRequest{
+		Message: fmt.Sprintf("Delete %s via Vaulty", path),
+		Sha:     sha,
+	}
+
+	payload, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+c.Token)
+	httpReq.Header.Set("Accept", "application/vnd.github+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := c.HTTPClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
