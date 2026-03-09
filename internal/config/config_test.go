@@ -21,7 +21,7 @@ func TestDefaultPath(t *testing.T) {
 }
 
 func TestLoad(t *testing.T) {
-	// Create a temporary directory for test files
+
 	tmpDir := t.TempDir()
 
 	t.Run("load existing file", func(t *testing.T) {
@@ -67,10 +67,7 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("load with empty path uses default", func(t *testing.T) {
-		// This will fail because default path doesn't exist, but shouldn't panic
 		_, err := Load("")
-		// Error is expected since ~/.vty/config.json likely doesn't exist
-		// We just verify it doesn't panic
 		_ = err
 	})
 }
@@ -86,12 +83,10 @@ func TestSave(t *testing.T) {
 			t.Fatalf("Save() error = %v", err)
 		}
 
-		// Verify file was created
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			t.Fatal("Save() did not create file")
 		}
 
-		// Verify file permissions
 		info, err := os.Stat(path)
 		if err != nil {
 			t.Fatalf("failed to stat file: %v", err)
@@ -100,7 +95,6 @@ func TestSave(t *testing.T) {
 			t.Errorf("file permissions = %o, want 0600", info.Mode().Perm())
 		}
 
-		// Verify timestamps were set
 		if cfg.CreatedAt.IsZero() {
 			t.Error("CreatedAt not set")
 		}
@@ -124,10 +118,9 @@ func TestSave(t *testing.T) {
 
 	t.Run("save with empty path uses default", func(t *testing.T) {
 		cfg := &Config{Repo: "/test/repo"}
-		// This should attempt to save to ~/.vty/config.json
-		// We'll get an error if home dir isn't writable, but it shouldn't panic
+
 		err := cfg.Save("")
-		// We don't check error here as it depends on environment
+
 		_ = err
 	})
 
@@ -141,7 +134,6 @@ func TestSave(t *testing.T) {
 
 		createdAt := cfg.CreatedAt
 
-		// Save again and verify UpdatedAt changed but CreatedAt stayed same
 		cfg.Repo = "/new/repo"
 		if err := cfg.Save(path); err != nil {
 			t.Fatalf("Save() error = %v", err)

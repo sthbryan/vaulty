@@ -48,7 +48,6 @@ Examples:
 func runPull(cmd *cobra.Command, args []string) error {
 	name := args[0]
 
-	// Load config
 	cfg, err := config.Load("")
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
@@ -63,7 +62,6 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
 
-	// Get GitHub token
 	token, err := github.GetGitHubToken()
 	if err != nil {
 		return fmt.Errorf("getting GitHub token: %w", err)
@@ -73,17 +71,15 @@ func runPull(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Try to download from envs/ first, then ssh/
 	logger.Info("☁️  Downloading from GitHub...", "name", name)
 
 	var content *github.ContentResponse
 	var path string
 
-	// Try envs/ first
 	path = fmt.Sprintf("envs/%s.vty", name)
 	content, err = client.GetContent(ctx, owner, repo, path)
 	if err != nil {
-		// Try ssh/ next
+
 		logger.Info("Not found in envs/, trying ssh/...")
 		path = fmt.Sprintf("ssh/%s.vty", name)
 		content, err = client.GetContent(ctx, owner, repo, path)
@@ -94,25 +90,21 @@ func runPull(cmd *cobra.Command, args []string) error {
 
 	logger.Info("✓ Downloaded", "path", path, "size", content.Size)
 
-	// Decode content
 	encodedData, err := client.DecodeContent(content)
 	if err != nil {
 		return fmt.Errorf("decoding content: %w", err)
 	}
 
-	// Deserialize encrypted data
 	encryptedData, err := crypto.DeserializeEncryptedData(encodedData)
 	if err != nil {
 		return fmt.Errorf("deserializing encrypted data: %w", err)
 	}
 
-	// Get password
 	password, err := getPassword()
 	if err != nil {
 		return err
 	}
 
-	// Decrypt
 	logger.Info("🔓 Decrypting...")
 	compressedData, err := crypto.Decrypt(encryptedData, password)
 	if err != nil {
@@ -122,20 +114,17 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decrypting: %w", err)
 	}
 
-	// Decompress
 	logger.Info("🗜️  Decompressing...")
 	plaintext, err := compress.Decompress(compressedData)
 	if err != nil {
 		return fmt.Errorf("decompressing: %w", err)
 	}
 
-	// Determine output filename
 	outputFile, err := getOutputFilename(name)
 	if err != nil {
 		return err
 	}
 
-	// Make path absolute
 	if !filepath.IsAbs(outputFile) {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -144,7 +133,6 @@ func runPull(cmd *cobra.Command, args []string) error {
 		outputFile = filepath.Join(cwd, outputFile)
 	}
 
-	// Check if file exists
 	if _, err := os.Stat(outputFile); err == nil {
 		if pullInteractive {
 			confirmed, err := ui.AskConfirm(fmt.Sprintf("File %s already exists. Overwrite?", outputFile), false)
@@ -160,7 +148,6 @@ func runPull(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Save file with 0600 permissions
 	if err := os.WriteFile(outputFile, plaintext, 0600); err != nil {
 		return fmt.Errorf("writing file: %w", err)
 	}
@@ -174,7 +161,6 @@ func runPull(cmd *cobra.Command, args []string) error {
 }
 
 func getPassword() (string, error) {
-	// Priority: --password-stdin > --password > interactive prompt
 
 	if pullPasswordStdin {
 		reader := bufio.NewReader(os.Stdin)
@@ -189,7 +175,6 @@ func getPassword() (string, error) {
 		return pullPassword, nil
 	}
 
-	// Interactive prompt
 	password, err := ui.AskPassword("🔐 Enter decryption password")
 	if err != nil {
 		return "", fmt.Errorf("password prompt cancelled")
@@ -199,17 +184,15 @@ func getPassword() (string, error) {
 }
 
 func getOutputFilename(name string) (string, error) {
-	// If -o flag is set, use that
+
 	if pullOutput != "" {
 		return pullOutput, nil
 	}
 
-	// If not interactive, default to .env
 	if !pullInteractive {
 		return ".env", nil
 	}
 
-	// Interactive filename selection
 	fmt.Println()
 	fmt.Println(ui.InfoStyle.Render("💾 Choose output filename:"))
 
@@ -249,7 +232,6 @@ func init() {
 	rootCmd.AddCommand(pullCmd)
 }
 
-// SetLogger for testing
 func SetLogger(l *log.Logger) {
 	logger = l
 }

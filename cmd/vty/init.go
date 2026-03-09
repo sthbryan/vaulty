@@ -38,7 +38,7 @@ This command will guide you through:
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	// Print welcome logo
+
 	fmt.Println()
 	fmt.Println(lipgloss.NewStyle().
 		Foreground(lipgloss.Color(ui.Primary)).
@@ -72,7 +72,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no repository configured")
 	}
 
-	// Save config
 	cfg := &config.Config{}
 	cfg.SetRepo(repo)
 
@@ -115,7 +114,6 @@ func createNewRepo() string {
 		break
 	}
 
-	// Get GitHub username
 	username, err := getGitHubUsername()
 	if err != nil {
 		fmt.Println(ui.ErrorStyle.Render(fmt.Sprintf("Error: %v", err)))
@@ -124,14 +122,13 @@ func createNewRepo() string {
 
 	repo := fmt.Sprintf("%s/%s", username, name)
 
-	// Create repo using gh CLI
 	fmt.Println()
 	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Creating private repository %s...", repo)))
 
 	cmd := exec.Command("gh", "repo", "create", name, "--private", "--description", "Vaulty secrets repository", "--confirm")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// Check if repo already exists
+
 		if strings.Contains(string(output), "already exists") {
 			fmt.Println(ui.WarningStyle.Render(fmt.Sprintf("Repository %s already exists", repo)))
 			return repo
@@ -140,7 +137,6 @@ func createNewRepo() string {
 		return ""
 	}
 
-	// Give GitHub a moment to propagate
 	time.Sleep(2 * time.Second)
 
 	fmt.Println(ui.SuccessStyle.Render(fmt.Sprintf("✓ Repository %s created", repo)))
@@ -169,7 +165,6 @@ func linkExistingRepo() string {
 			return ""
 		}
 
-		// Parse owner/repo from URL or direct input
 		owner, repo, err := parseRepoFromInput(url)
 		if err != nil {
 			fmt.Println(ui.ErrorStyle.Render(fmt.Sprintf("Invalid format: %v", err)))
@@ -178,7 +173,6 @@ func linkExistingRepo() string {
 
 		repoFull := fmt.Sprintf("%s/%s", owner, repo)
 
-		// Verify repo exists
 		fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Verifying repository %s...", repoFull)))
 
 		token, err := github.GetGitHubToken()
@@ -191,7 +185,6 @@ func linkExistingRepo() string {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		// Try to list root directory to verify access
 		_, err = client.ListDirectory(ctx, owner, repo, "")
 		if err != nil {
 			fmt.Println(ui.ErrorStyle.Render(fmt.Sprintf("Cannot access repository: %v", err)))
@@ -215,10 +208,8 @@ func getGitHubUsername() (string, error) {
 func parseRepoFromInput(input string) (owner, repo string, err error) {
 	input = strings.TrimSpace(input)
 
-	// Try to parse as URL
 	if strings.Contains(input, "github.com") {
-		// Handle HTTPS: https://github.com/owner/repo
-		// Handle SSH: git@github.com:owner/repo.git
+
 		re := regexp.MustCompile(`github\.com[/:]([^/]+)/([^/]+?)(?:\.git)?$`)
 		matches := re.FindStringSubmatch(input)
 		if len(matches) == 3 {
@@ -227,7 +218,6 @@ func parseRepoFromInput(input string) (owner, repo string, err error) {
 		return "", "", fmt.Errorf("could not parse GitHub URL")
 	}
 
-	// Try to parse as owner/repo
 	return github.ParseRepo(input)
 }
 
@@ -235,9 +225,7 @@ func isValidRepoName(name string) bool {
 	if name == "" {
 		return false
 	}
-	// GitHub repo name rules: alphanumeric, hyphens, underscores, periods
-	// Cannot start with a period or hyphen
-	// Max 100 chars
+
 	if len(name) > 100 {
 		return false
 	}

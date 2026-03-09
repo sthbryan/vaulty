@@ -25,8 +25,6 @@ func TestGetGitHubToken(t *testing.T) {
 		}
 	})
 
-	// Note: Skipping test for "no token available" as it depends on gh CLI
-	// being unavailable, which is system-dependent
 }
 
 func TestNewClient(t *testing.T) {

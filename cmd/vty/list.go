@@ -35,7 +35,6 @@ Examples:
 	RunE: runList,
 }
 
-// ListItem represents a single item in the list
 type ListItem struct {
 	Name     string
 	Type     string
@@ -44,7 +43,7 @@ type ListItem struct {
 }
 
 func runList(cmd *cobra.Command, args []string) error {
-	// Load config
+
 	cfg, err := config.Load("")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -54,19 +53,16 @@ func runList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("configuration error: %w", err)
 	}
 
-	// Get GitHub token
 	token, err := github.GetGitHubToken()
 	if err != nil {
 		return fmt.Errorf("failed to get GitHub token: %w", err)
 	}
 
-	// Parse repo
 	owner, repo, err := github.ParseRepo(cfg.Repo)
 	if err != nil {
 		return fmt.Errorf("invalid repo format: %w", err)
 	}
 
-	// Initialize GitHub client
 	client := github.NewClient(token)
 	ctx := context.Background()
 
@@ -76,7 +72,6 @@ func runList(cmd *cobra.Command, args []string) error {
 
 	var items []ListItem
 
-	// List envs directory if filter allows
 	if listType == "all" || listType == "env" {
 		envItems, err := listDirectory(ctx, client, owner, repo, "envs", "env")
 		if err != nil {
@@ -86,7 +81,6 @@ func runList(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// List ssh directory if filter allows
 	if listType == "all" || listType == "ssh" {
 		sshItems, err := listDirectory(ctx, client, owner, repo, "ssh", "ssh")
 		if err != nil {
@@ -102,10 +96,8 @@ func runList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Render table
 	renderTable(items)
 
-	// Show total count
 	fmt.Println()
 	fmt.Println(ui.InfoStyle.Render(fmt.Sprintf("📊 Total: %d secret(s)", len(items))))
 	fmt.Println()
@@ -116,10 +108,9 @@ func runList(cmd *cobra.Command, args []string) error {
 func listDirectory(ctx context.Context, client *github.Client, owner, repo, dirPath, itemType string) ([]ListItem, error) {
 	var items []ListItem
 
-	// Try to list the directory
 	dirItems, err := client.ListDirectory(ctx, owner, repo, dirPath)
 	if err != nil {
-		// Directory might not exist yet
+
 		if strings.Contains(err.Error(), "404") {
 			return items, nil
 		}
@@ -127,12 +118,11 @@ func listDirectory(ctx context.Context, client *github.Client, owner, repo, dirP
 	}
 
 	for _, item := range dirItems {
-		// Skip directories
+
 		if item.Type != "file" {
 			continue
 		}
 
-		// Extract name without extension
 		name := item.Name
 		if strings.HasSuffix(name, ".json") {
 			name = strings.TrimSuffix(name, ".json")
@@ -144,13 +134,12 @@ func listDirectory(ctx context.Context, client *github.Client, owner, repo, dirP
 			Size: int64(item.Size),
 		}
 
-		// Try to get metadata from the file
 		content, err := client.GetContent(ctx, owner, repo, item.Path)
 		if err == nil && content != nil {
-			// Decode content
+
 			decoded, err := client.DecodeContent(content)
 			if err == nil {
-				// Parse as VaultFile to get metadata
+
 				var vaultFile models.VaultFile
 				if err := json.Unmarshal(decoded, &vaultFile); err == nil {
 					listItem.Modified = vaultFile.Metadata.UpdatedAt
@@ -166,22 +155,19 @@ func listDirectory(ctx context.Context, client *github.Client, owner, repo, dirP
 }
 
 func renderTable(items []ListItem) {
-	// Define colors
+
 	primary := lipgloss.Color("#7C3AED")
 	success := lipgloss.Color("#10B981")
 	muted := lipgloss.Color("#6B7280")
 
-	// Header style
 	headerStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(primary).
 		Padding(0, 1)
 
-	// Cell style
 	cellStyle := lipgloss.NewStyle().
 		Padding(0, 1)
 
-	// Type badge styles
 	envStyle := lipgloss.NewStyle().
 		Foreground(success).
 		Bold(true)
@@ -190,13 +176,12 @@ func renderTable(items []ListItem) {
 		Foreground(primary).
 		Bold(true)
 
-	// Build rows
 	rows := [][]string{
 		{headerStyle.Render("Name"), headerStyle.Render("Type"), headerStyle.Render("Modified"), headerStyle.Render("Size")},
 	}
 
 	for _, item := range items {
-		// Format type with badge
+
 		var typeStr string
 		if item.Type == "env" {
 			typeStr = envStyle.Render("🔐 env")
@@ -204,13 +189,11 @@ func renderTable(items []ListItem) {
 			typeStr = sshStyle.Render("🔑 ssh")
 		}
 
-		// Format modified time
 		modifiedStr := "Unknown"
 		if !item.Modified.IsZero() {
 			modifiedStr = item.Modified.Format("2006-01-02 15:04")
 		}
 
-		// Format size
 		sizeStr := ui.FormatBytes(item.Size)
 
 		rows = append(rows, []string{
@@ -221,7 +204,6 @@ func renderTable(items []ListItem) {
 		})
 	}
 
-	// Create and render table
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
 		BorderStyle(lipgloss.NewStyle().Foreground(muted)).

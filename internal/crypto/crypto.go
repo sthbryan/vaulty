@@ -16,7 +16,7 @@ const (
 	SaltSize         = 32
 	IVSize           = 12
 	KeySize          = 32
-	DefaultChunkSize = 64 * 1024 // 64KB
+	DefaultChunkSize = 64 * 1024
 	PBKDF2Iterations = 100000
 )
 
@@ -29,14 +29,12 @@ var (
 	ErrInvalidChunkData  = errors.New("invalid chunk data")
 )
 
-// EncryptedData represents the full encrypted data structure
 type EncryptedData struct {
 	Salt       []byte `json:"salt"`
 	IV         []byte `json:"iv"`
 	Ciphertext []byte `json:"ciphertext"`
 }
 
-// EncryptedChunk represents a single encrypted chunk
 type EncryptedChunk struct {
 	Index      uint32 `json:"index"`
 	IV         []byte `json:"iv"`
@@ -44,14 +42,11 @@ type EncryptedChunk struct {
 	IsLast     bool   `json:"is_last"`
 }
 
-// ChunkedEncryptedData represents data encrypted in chunks
 type ChunkedEncryptedData struct {
 	Salt   []byte           `json:"salt"`
 	Chunks []EncryptedChunk `json:"chunks"`
 }
 
-// pbkdf2Key derives a key from password and salt using PBKDF2 with HMAC-SHA256
-// Implementation using only standard library packages
 func pbkdf2Key(password, salt []byte, iter, keyLen int) []byte {
 	prf := hmac.New(sha256.New, password)
 	dkLen := keyLen
@@ -86,7 +81,6 @@ func pbkdf2Key(password, salt []byte, iter, keyLen int) []byte {
 	return dk[:dkLen]
 }
 
-// DeriveKey derives a 256-bit key from a password and salt using PBKDF2
 func DeriveKey(password string, salt []byte) ([]byte, error) {
 	if len(salt) != SaltSize {
 		return nil, ErrInvalidSaltSize
@@ -96,7 +90,6 @@ func DeriveKey(password string, salt []byte) ([]byte, error) {
 	return key, nil
 }
 
-// Encrypt encrypts plaintext using AES-256-GCM with a derived key
 func Encrypt(plaintext []byte, password string) (*EncryptedData, error) {
 	salt := make([]byte, SaltSize)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
@@ -132,7 +125,6 @@ func Encrypt(plaintext []byte, password string) (*EncryptedData, error) {
 	}, nil
 }
 
-// Decrypt decrypts ciphertext using AES-256-GCM with a derived key
 func Decrypt(data *EncryptedData, password string) ([]byte, error) {
 	if len(data.Salt) != SaltSize {
 		return nil, ErrInvalidSaltSize
@@ -169,7 +161,6 @@ func Decrypt(data *EncryptedData, password string) ([]byte, error) {
 	return plaintext, nil
 }
 
-// EncryptWithChunks encrypts plaintext in chunks using AES-256-GCM
 func EncryptWithChunks(plaintext []byte, password string, chunkSize int) (*ChunkedEncryptedData, error) {
 	if chunkSize <= 0 {
 		chunkSize = DefaultChunkSize
@@ -228,7 +219,6 @@ func EncryptWithChunks(plaintext []byte, password string, chunkSize int) (*Chunk
 	}, nil
 }
 
-// DecryptChunks decrypts chunked encrypted data
 func DecryptChunks(data *ChunkedEncryptedData, password string) ([]byte, error) {
 	if len(data.Salt) != SaltSize {
 		return nil, ErrInvalidSaltSize
@@ -274,7 +264,6 @@ func DecryptChunks(data *ChunkedEncryptedData, password string) ([]byte, error) 
 	return plaintext, nil
 }
 
-// SerializeEncryptedData serializes EncryptedData to bytes
 func SerializeEncryptedData(data *EncryptedData) []byte {
 	result := make([]byte, 0, SaltSize+IVSize+len(data.Ciphertext))
 	result = append(result, data.Salt...)
@@ -283,7 +272,6 @@ func SerializeEncryptedData(data *EncryptedData) []byte {
 	return result
 }
 
-// DeserializeEncryptedData deserializes bytes to EncryptedData
 func DeserializeEncryptedData(data []byte) (*EncryptedData, error) {
 	if len(data) < SaltSize+IVSize {
 		return nil, errors.New("data too short")
@@ -296,7 +284,6 @@ func DeserializeEncryptedData(data []byte) (*EncryptedData, error) {
 	}, nil
 }
 
-// SerializeChunkedEncryptedData serializes ChunkedEncryptedData to bytes
 func SerializeChunkedEncryptedData(data *ChunkedEncryptedData) []byte {
 	var result []byte
 
@@ -331,7 +318,6 @@ func SerializeChunkedEncryptedData(data *ChunkedEncryptedData) []byte {
 	return result
 }
 
-// DeserializeChunkedEncryptedData deserializes bytes to ChunkedEncryptedData
 func DeserializeChunkedEncryptedData(data []byte) (*ChunkedEncryptedData, error) {
 	if len(data) < SaltSize+4 {
 		return nil, errors.New("data too short")
@@ -391,7 +377,6 @@ func DeserializeChunkedEncryptedData(data []byte) (*ChunkedEncryptedData, error)
 	}, nil
 }
 
-// GenerateSalt generates a cryptographically secure random salt
 func GenerateSalt() ([]byte, error) {
 	salt := make([]byte, SaltSize)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
@@ -400,7 +385,6 @@ func GenerateSalt() ([]byte, error) {
 	return salt, nil
 }
 
-// GenerateIV generates a cryptographically secure random IV
 func GenerateIV() ([]byte, error) {
 	iv := make([]byte, IVSize)
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
@@ -409,7 +393,6 @@ func GenerateIV() ([]byte, error) {
 	return iv, nil
 }
 
-// EncryptWithKey encrypts plaintext using AES-256-GCM with a provided key
 func EncryptWithKey(plaintext, key []byte) (*EncryptedData, error) {
 	if len(key) != KeySize {
 		return nil, errors.New("key must be 32 bytes")
@@ -438,7 +421,6 @@ func EncryptWithKey(plaintext, key []byte) (*EncryptedData, error) {
 	}, nil
 }
 
-// DecryptWithKey decrypts ciphertext using AES-256-GCM with a provided key
 func DecryptWithKey(data *EncryptedData, key []byte) ([]byte, error) {
 	if len(key) != KeySize {
 		return nil, errors.New("key must be 32 bytes")

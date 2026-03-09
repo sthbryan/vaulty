@@ -49,7 +49,6 @@ func runSync(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	path := args[1]
 
-	// Validate name
 	if strings.Contains(name, "/") || strings.Contains(name, "\\") {
 		return fmt.Errorf("name cannot contain path separators")
 	}
@@ -57,7 +56,6 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("name cannot start with a dot")
 	}
 
-	// Check if file exists
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -69,7 +67,6 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("path must be a file, not a directory: %s", path)
 	}
 
-	// Load config
 	cfg, err := config.Load("")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -78,14 +75,12 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("configuration error: %w", err)
 	}
 
-	// Get GitHub token
 	token, err := github.GetGitHubToken()
 	if err != nil {
 		return fmt.Errorf("failed to get GitHub token: %w", err)
 	}
 	client := github.NewClient(token)
 
-	// Get password
 	password := syncPassword
 	if password == "" && syncPasswordStdin {
 		reader := bufio.NewReader(os.Stdin)
@@ -105,7 +100,6 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	ui.PrintInfo("📦 Reading file: %s", path)
 
-	// Read file
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
@@ -114,11 +108,9 @@ func runSync(cmd *cobra.Command, args []string) error {
 	originalSize := int64(len(content))
 	ui.PrintInfo("📊 Original size: %s", ui.FormatBytes(originalSize))
 
-	// Calculate checksum
 	hash := sha256.Sum256(content)
 	checksum := fmt.Sprintf("%x", hash)
 
-	// Compress
 	ui.PrintInfo("🗜️  Compressing...")
 	compressed, err := compress.Compress(content)
 	if err != nil {
@@ -130,14 +122,12 @@ func runSync(cmd *cobra.Command, args []string) error {
 		ui.FormatBytes(compressedSize),
 		float64(originalSize-compressedSize)/float64(originalSize)*100)
 
-	// Encrypt
 	ui.PrintInfo("🔒 Encrypting...")
 	encrypted, err := crypto.Encrypt(compressed, password)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt: %w", err)
 	}
 
-	// Create vault file
 	vaultFile := models.VaultFile{
 		Metadata: models.SecretMetadata{
 			Name:      name,
@@ -150,13 +140,11 @@ func runSync(cmd *cobra.Command, args []string) error {
 		Data: *encrypted,
 	}
 
-	// Serialize to JSON
 	vaultData, err := json.MarshalIndent(vaultFile, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal vault file: %w", err)
 	}
 
-	// Check if file exists on GitHub
 	ctx := context.Background()
 	owner, repoName, err := github.ParseRepo(cfg.Repo)
 	if err != nil {
@@ -169,7 +157,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 	var existingSha string
 	existingContent, err := client.GetContent(ctx, owner, repoName, remotePath)
 	if err == nil && existingContent != nil {
-		// File exists
+
 		if !syncForce {
 			ui.PrintWarning("⚠️  File already exists on remote")
 			confirmed, confirmErr := ui.AskConfirm("Overwrite existing file?", false)
@@ -185,7 +173,6 @@ func runSync(cmd *cobra.Command, args []string) error {
 		ui.PrintInfo("📝 Will overwrite existing file")
 	}
 
-	// Upload to GitHub
 	ui.PrintInfo("☁️  Uploading to GitHub...")
 
 	encodedContent := base64.StdEncoding.EncodeToString(vaultData)
@@ -204,7 +191,6 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to upload: %w", err)
 	}
 
-	// Success
 	ui.PrintSuccess("✅ Synced successfully!")
 	fmt.Println()
 	fmt.Printf("  Name:    %s\n", name)

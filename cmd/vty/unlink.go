@@ -27,7 +27,6 @@ You can re-link Vaulty anytime by running 'vty init' again.`,
 func runUnlink(cmd *cobra.Command, args []string) error {
 	configPath := config.DefaultPath()
 
-	// Check if config file exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		fmt.Println()
 		logger.Info("Vaulty is not linked to any repository")
@@ -35,7 +34,6 @@ func runUnlink(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Show warning
 	fmt.Println()
 	logger.Warn("⚠️  WARNING: You are about to unlink Vaulty!")
 	logger.Warn("   This will delete your local configuration file:")
@@ -44,7 +42,6 @@ func runUnlink(cmd *cobra.Command, args []string) error {
 	logger.Info("   Your encrypted secrets in GitHub will NOT be affected.")
 	fmt.Println()
 
-	// Ask for confirmation unless --force flag is used
 	if !unlinkForce {
 		confirmed, err := ui.AskConfirm("   Are you sure you want to unlink Vaulty?", false)
 		if err != nil {
@@ -57,13 +54,11 @@ func runUnlink(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Delete the config file
 	if err := os.Remove(configPath); err != nil {
 		logger.Error("Failed to delete config file", "error", err)
 		return fmt.Errorf("deleting config: %w", err)
 	}
 
-	// Success
 	fmt.Println()
 	logger.Info("✅ Vaulty has been unlinked successfully!")
 	logger.Info(fmt.Sprintf("   Config deleted: %s", configPath))

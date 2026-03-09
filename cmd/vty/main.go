@@ -39,8 +39,6 @@ func init() {
 		ReportTimestamp: false,
 		Level:           log.InfoLevel,
 	})
-
-	// Subcommands are added by each command file's init() function
 }
 
 func main() {

@@ -7,7 +7,6 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-// Logger instance
 var Logger *log.Logger
 
 func init() {
@@ -18,7 +17,6 @@ func init() {
 	})
 }
 
-// Logo ASCII art for Vaulty
 const logo = `
 ██╗   ██╗ █████╗ ██╗   ██╗██╗  ████████╗██╗   ██╗
 ██║   ██║██╔══██╗██║   ██║██║  ╚══██╔══╝╚██╗ ██╔╝
@@ -28,78 +26,65 @@ const logo = `
   ╚═══╝  ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝      ╚═╝   
 `
 
-// PrintLogo prints the Vaulty ASCII logo
 func PrintLogo() {
 	fmt.Println(TitleStyle.Render(logo))
 }
 
-// PrintSuccess prints a success message with emoji
 func PrintSuccess(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Println(SuccessStyle.Render("✅ " + msg))
 }
 
-// PrintError prints an error message with emoji
 func PrintError(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Println(ErrorStyle.Render("❌ " + msg))
 }
 
-// PrintWarning prints a warning message with emoji
 func PrintWarning(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Println(WarningStyle.Render("⚠️  " + msg))
 }
 
-// PrintInfo prints an info message with emoji
 func PrintInfo(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Println(InfoStyle.Render("📦 " + msg))
 }
 
-// PrintLock prints a lock message with emoji
 func PrintLock(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Println(TitleStyle.Render("🔒 " + msg))
 }
 
-// PrintUnlock prints an unlock message with emoji
 func PrintUnlock(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Println(SuccessStyle.Render("🔓 " + msg))
 }
 
-// PrintCloud prints a cloud message with emoji
 func PrintCloud(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Println(InfoStyle.Render("☁️  " + msg))
 }
 
-// PrintSave prints a save message with emoji
 func PrintSave(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Println(SuccessStyle.Render("💾 " + msg))
 }
 
-// PrintKey prints a key message with emoji
 func PrintKey(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Println(TitleStyle.Render("🔑 " + msg))
 }
 
-// PrintStats prints a stats message with emoji
 func PrintStats(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Println(InfoStyle.Render("📊 " + msg))
 }
 
-// PrintSparkle prints a sparkle message with emoji
 func PrintSparkle(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Println(TitleStyle.Render("✨ " + msg))
 }
 
-// FormatBytes formats bytes into human-readable format
 func FormatBytes(bytes int64) string {
 	const (
 		KB = 1024
@@ -122,7 +107,6 @@ func FormatBytes(bytes int64) string {
 	}
 }
 
-// FormatTime formats a duration into human-readable format
 func FormatTime(d time.Duration) string {
 	if d < time.Second {
 		return fmt.Sprintf("%.0fms", float64(d)/float64(time.Millisecond))

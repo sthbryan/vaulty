@@ -8,14 +8,12 @@ import (
 	"time"
 )
 
-// Config holds the Vaulty configuration
 type Config struct {
 	Repo      string    `json:"repo"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// DefaultPath returns the default configuration file path
 func DefaultPath() string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -24,7 +22,6 @@ func DefaultPath() string {
 	return filepath.Join(homeDir, ".vty", "config.json")
 }
 
-// Load reads configuration from the specified path
 func Load(path string) (*Config, error) {
 	if path == "" {
 		path = DefaultPath()
@@ -46,7 +43,6 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// Save writes configuration to the specified path with 0600 permissions
 func (c *Config) Save(path string) error {
 	if path == "" {
 		path = DefaultPath()
@@ -74,7 +70,6 @@ func (c *Config) Save(path string) error {
 	return nil
 }
 
-// Validate checks if the configuration is valid
 func (c *Config) Validate() error {
 	if c.Repo == "" {
 		return fmt.Errorf("repo is required")
@@ -82,7 +77,6 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// SetRepo sets the repository path and updates timestamps
 func (c *Config) SetRepo(repo string) {
 	c.Repo = repo
 	c.UpdatedAt = time.Now()

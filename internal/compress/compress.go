@@ -7,7 +7,6 @@ import (
 	"github.com/klauspost/compress/gzip"
 )
 
-// Compress compresses data using gzip with BestCompression level
 func Compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	w, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
@@ -23,7 +22,6 @@ func Compress(data []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Decompress decompresses gzip-compressed data
 func Decompress(data []byte) ([]byte, error) {
 	r, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {

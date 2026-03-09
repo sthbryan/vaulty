@@ -6,7 +6,6 @@ import (
 	"github.com/charmbracelet/huh"
 )
 
-// AskPassword prompts for a password with hidden input
 func AskPassword(title string) (string, error) {
 	var password string
 
@@ -33,7 +32,6 @@ func AskPassword(title string) (string, error) {
 	return password, nil
 }
 
-// AskChoice prompts the user to select from a list of options
 func AskChoice(title string, options []string) (string, error) {
 	if len(options) == 0 {
 		return "", fmt.Errorf("no options provided")
@@ -41,7 +39,6 @@ func AskChoice(title string, options []string) (string, error) {
 
 	var selected string
 
-	// Convert strings to huh.Option
 	huhOptions := make([]huh.Option[string], len(options))
 	for i, opt := range options {
 		huhOptions[i] = huh.NewOption(opt, opt)
@@ -63,7 +60,6 @@ func AskChoice(title string, options []string) (string, error) {
 	return selected, nil
 }
 
-// AskInput prompts for text input with an optional placeholder
 func AskInput(title string, placeholder string) (string, error) {
 	var input string
 
@@ -89,7 +85,6 @@ func AskInput(title string, placeholder string) (string, error) {
 	return input, nil
 }
 
-// AskInputOptional prompts for text input (can be empty)
 func AskInputOptional(title string, placeholder string) (string, error) {
 	var input string
 
@@ -109,7 +104,6 @@ func AskInputOptional(title string, placeholder string) (string, error) {
 	return input, nil
 }
 
-// AskConfirm prompts for a yes/no confirmation
 func AskConfirm(title string, defaultYes bool) (bool, error) {
 	var confirmed bool
 
@@ -130,7 +124,6 @@ func AskConfirm(title string, defaultYes bool) (bool, error) {
 	return confirmed, nil
 }
 
-// AskConfirmWithDefault prompts for confirmation with a default value
 func AskConfirmWithDefault(title string, defaultValue bool) (bool, error) {
 	confirmed := defaultValue
 
