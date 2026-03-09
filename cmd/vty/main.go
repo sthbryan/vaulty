@@ -26,18 +26,11 @@ into your development workflow. Vaulty supports:
 
   • Secure storage of environment variables
   • SSH key management and injection
-  • Multiple storage backends
-  • Easy integration with shell environments
+  • GitHub as storage backend
+  • Easy migration between machines
 
 Use "vty [command] --help" for more information about a command.`,
 	Version: fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date),
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if err := checkConfig(); err != nil {
-			logger.Error("Configuration check failed", "error", err)
-			return err
-		}
-		return nil
-	},
 }
 
 func init() {
@@ -47,15 +40,7 @@ func init() {
 		Level:           log.InfoLevel,
 	})
 
-	// Subcommands will be initialized here
-	// Example: rootCmd.AddCommand(envCmd)
-	// Example: rootCmd.AddCommand(sshCmd)
-}
-
-func checkConfig() error {
-	// Placeholder: verify config file exists and is valid
-	// This will be implemented when config package is ready
-	return nil
+	// Subcommands are added by each command file's init() function
 }
 
 func main() {

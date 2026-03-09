@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/sthbryan/vaulty/internal/compress"
 	"github.com/sthbryan/vaulty/internal/config"
 	"github.com/sthbryan/vaulty/internal/crypto"
@@ -20,204 +21,98 @@ import (
 	"github.com/sthbryan/vaulty/pkg/models"
 )
 
-// SyncCommand represents the sync command
-type SyncCommand struct {
-	name          string
-	path          string
-	password      string
-	passwordStdin bool
-	force         bool
-	config        *config.Config
-	githubClient  *github.Client
+var (
+	syncPassword      string
+	syncPasswordStdin bool
+	syncForce         bool
+)
+
+var syncCmd = &cobra.Command{
+	Use:   "sync <name> <path>",
+	Short: "📦 Sync an environment file to Vaulty",
+	Long: `Compress, encrypt, and upload an environment file to your Vaulty repository.
+
+The file will be:
+  1. Compressed using gzip for efficiency
+  2. Encrypted using AES-256-GCM with your password
+  3. Uploaded to your GitHub repository in the envs/ directory
+
+Examples:
+  vty sync production .env.production
+  vty sync staging .env.staging --force
+  vty sync api .env --password-stdin < password.txt`,
+	Args: cobra.ExactArgs(2),
+	RunE: runSync,
 }
 
-// NewSyncCommand creates a new sync command instance
-func NewSyncCommand() *SyncCommand {
-	return &SyncCommand{}
-}
+func runSync(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	path := args[1]
 
-// Name returns the command name
-func (c *SyncCommand) Name() string {
-	return "sync"
-}
-
-// Usage returns the command usage
-func (c *SyncCommand) Usage() string {
-	return "sync <name> <path>"
-}
-
-// Description returns the command description
-func (c *SyncCommand) Description() string {
-	return "📦 Sync an environment file to Vaulty"
-}
-
-// Execute runs the sync command
-func (c *SyncCommand) Execute(args []string) error {
-	if err := c.parseArgs(args); err != nil {
-		return err
-	}
-
-	if err := c.validate(); err != nil {
-		return err
-	}
-
-	if err := c.loadConfig(); err != nil {
-		return err
-	}
-
-	if err := c.initGitHubClient(); err != nil {
-		return err
-	}
-
-	if err := c.getPassword(); err != nil {
-		return err
-	}
-
-	return c.sync()
-}
-
-// parseArgs parses command arguments and flags
-func (c *SyncCommand) parseArgs(args []string) error {
-	// Parse flags first
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-
-		switch arg {
-		case "--password":
-			if i+1 >= len(args) {
-				return fmt.Errorf("--password requires a value")
-			}
-			c.password = args[i+1]
-			i++
-		case "--password-stdin":
-			c.passwordStdin = true
-		case "-f", "--force":
-			c.force = true
-		default:
-			// Skip flags that start with -
-			if strings.HasPrefix(arg, "-") {
-				continue
-			}
-			// First non-flag arg is name
-			if c.name == "" {
-				c.name = arg
-			} else if c.path == "" {
-				c.path = arg
-			}
-		}
-	}
-
-	return nil
-}
-
-// validate validates the command inputs
-func (c *SyncCommand) validate() error {
 	// Validate name
-	if c.name == "" {
-		return fmt.Errorf("name is required")
-	}
-
-	if strings.Contains(c.name, "/") || strings.Contains(c.name, "\\") {
+	if strings.Contains(name, "/") || strings.Contains(name, "\\") {
 		return fmt.Errorf("name cannot contain path separators")
 	}
-
-	if strings.HasPrefix(c.name, ".") {
+	if strings.HasPrefix(name, ".") {
 		return fmt.Errorf("name cannot start with a dot")
 	}
 
-	// Validate path
-	if c.path == "" {
-		return fmt.Errorf("path is required")
-	}
-
 	// Check if file exists
-	info, err := os.Stat(c.path)
+	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("file not found: %s", c.path)
+			return fmt.Errorf("file not found: %s", path)
 		}
 		return fmt.Errorf("cannot access file: %w", err)
 	}
-
 	if info.IsDir() {
-		return fmt.Errorf("path must be a file, not a directory: %s", c.path)
+		return fmt.Errorf("path must be a file, not a directory: %s", path)
 	}
 
-	// Validate password flags
-	if c.password != "" && c.passwordStdin {
-		return fmt.Errorf("cannot use both --password and --password-stdin")
-	}
-
-	return nil
-}
-
-// loadConfig loads the Vaulty configuration
-func (c *SyncCommand) loadConfig() error {
+	// Load config
 	cfg, err := config.Load("")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("configuration error: %w", err)
 	}
 
-	c.config = cfg
-	return nil
-}
-
-// initGitHubClient initializes the GitHub client
-func (c *SyncCommand) initGitHubClient() error {
+	// Get GitHub token
 	token, err := github.GetGitHubToken()
 	if err != nil {
 		return fmt.Errorf("failed to get GitHub token: %w", err)
 	}
+	client := github.NewClient(token)
 
-	c.githubClient = github.NewClient(token)
-	return nil
-}
-
-// getPassword retrieves the password from flags, stdin, or prompts
-func (c *SyncCommand) getPassword() error {
-	if c.password != "" {
-		return nil
-	}
-
-	if c.passwordStdin {
+	// Get password
+	password := syncPassword
+	if password == "" && syncPasswordStdin {
 		reader := bufio.NewReader(os.Stdin)
-		password, err := reader.ReadString('\n')
+		pwd, err := reader.ReadString('\n')
 		if err != nil && err != io.EOF {
 			return fmt.Errorf("failed to read password from stdin: %w", err)
 		}
-		c.password = strings.TrimSpace(password)
-		if c.password == "" {
-			return fmt.Errorf("password from stdin cannot be empty")
+		password = strings.TrimSpace(pwd)
+	}
+	if password == "" {
+		pwd, err := ui.AskPassword("🔐 Enter encryption password")
+		if err != nil {
+			return fmt.Errorf("failed to get password: %w", err)
 		}
-		return nil
+		password = pwd
 	}
 
-	// Prompt for password
-	password, err := ui.AskPassword("🔐 Enter encryption password")
-	if err != nil {
-		return fmt.Errorf("failed to get password: %w", err)
-	}
-
-	c.password = password
-	return nil
-}
-
-// sync performs the sync operation
-func (c *SyncCommand) sync() error {
-	ui.PrintInfo("Reading file: %s", c.path)
+	ui.PrintInfo("📦 Reading file: %s", path)
 
 	// Read file
-	content, err := os.ReadFile(c.path)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
 	}
 
 	originalSize := int64(len(content))
-	ui.PrintInfo("Original size: %s", ui.FormatBytes(originalSize))
+	ui.PrintInfo("📊 Original size: %s", ui.FormatBytes(originalSize))
 
 	// Calculate checksum
 	hash := sha256.Sum256(content)
@@ -231,13 +126,13 @@ func (c *SyncCommand) sync() error {
 	}
 
 	compressedSize := int64(len(compressed))
-	ui.PrintInfo("Compressed size: %s (%.1f%% reduction)",
+	ui.PrintInfo("📊 Compressed size: %s (%.1f%% reduction)",
 		ui.FormatBytes(compressedSize),
 		float64(originalSize-compressedSize)/float64(originalSize)*100)
 
 	// Encrypt
 	ui.PrintInfo("🔒 Encrypting...")
-	encrypted, err := crypto.Encrypt(compressed, c.password)
+	encrypted, err := crypto.Encrypt(compressed, password)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt: %w", err)
 	}
@@ -245,7 +140,7 @@ func (c *SyncCommand) sync() error {
 	// Create vault file
 	vaultFile := models.VaultFile{
 		Metadata: models.SecretMetadata{
-			Name:      c.name,
+			Name:      name,
 			Type:      models.SecretTypeEnv,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
@@ -263,40 +158,40 @@ func (c *SyncCommand) sync() error {
 
 	// Check if file exists on GitHub
 	ctx := context.Background()
-	owner, repo, err := github.ParseRepo(c.config.Repo)
+	owner, repoName, err := github.ParseRepo(cfg.Repo)
 	if err != nil {
 		return fmt.Errorf("invalid repo format: %w", err)
 	}
 
-	remotePath := fmt.Sprintf("envs/%s.json", c.name)
-	ui.PrintInfo("☁️  Checking remote: %s/%s/%s", owner, repo, remotePath)
+	remotePath := fmt.Sprintf("envs/%s.json", name)
+	ui.PrintInfo("☁️  Checking remote: %s/%s/%s", owner, repoName, remotePath)
 
 	var existingSha string
-	existingContent, err := c.githubClient.GetContent(ctx, owner, repo, remotePath)
+	existingContent, err := client.GetContent(ctx, owner, repoName, remotePath)
 	if err == nil && existingContent != nil {
 		// File exists
-		if !c.force {
-			ui.PrintWarning("File already exists on remote")
+		if !syncForce {
+			ui.PrintWarning("⚠️  File already exists on remote")
 			confirmed, confirmErr := ui.AskConfirm("Overwrite existing file?", false)
 			if confirmErr != nil {
 				return fmt.Errorf("confirmation failed: %w", confirmErr)
 			}
 			if !confirmed {
-				ui.PrintInfo("Sync cancelled")
+				ui.PrintInfo("❌ Sync cancelled")
 				return nil
 			}
 		}
 		existingSha = existingContent.Sha
-		ui.PrintInfo("Will overwrite existing file")
+		ui.PrintInfo("📝 Will overwrite existing file")
 	}
 
 	// Upload to GitHub
 	ui.PrintInfo("☁️  Uploading to GitHub...")
 
 	encodedContent := base64.StdEncoding.EncodeToString(vaultData)
-	commitMsg := fmt.Sprintf("Update %s via Vaulty sync", c.name)
+	commitMsg := fmt.Sprintf("Update %s via Vaulty sync", name)
 	if existingSha == "" {
-		commitMsg = fmt.Sprintf("Add %s via Vaulty sync", c.name)
+		commitMsg = fmt.Sprintf("Add %s via Vaulty sync", name)
 	}
 
 	req := github.ContentRequest{
@@ -305,25 +200,26 @@ func (c *SyncCommand) sync() error {
 		Sha:     existingSha,
 	}
 
-	if err := c.githubClient.PutContent(ctx, owner, repo, remotePath, req); err != nil {
+	if err := client.PutContent(ctx, owner, repoName, remotePath, req); err != nil {
 		return fmt.Errorf("failed to upload: %w", err)
 	}
 
 	// Success
 	ui.PrintSuccess("✅ Synced successfully!")
 	fmt.Println()
-	fmt.Printf("  Name:    %s\n", c.name)
+	fmt.Printf("  Name:    %s\n", name)
 	fmt.Printf("  Path:    %s\n", remotePath)
 	fmt.Printf("  Size:    %s → %s\n",
 		ui.FormatBytes(originalSize),
 		ui.FormatBytes(int64(len(vaultData))))
-	fmt.Printf("  Repo:    %s\n", c.config.Repo)
+	fmt.Printf("  Repo:    %s\n", cfg.Repo)
 
 	return nil
 }
 
-// RunSync is the entry point for the sync command
-func RunSync(args []string) error {
-	cmd := NewSyncCommand()
-	return cmd.Execute(args)
+func init() {
+	rootCmd.AddCommand(syncCmd)
+	syncCmd.Flags().StringVar(&syncPassword, "password", "", "Password for encryption")
+	syncCmd.Flags().BoolVar(&syncPasswordStdin, "password-stdin", false, "Read password from stdin")
+	syncCmd.Flags().BoolVarP(&syncForce, "force", "f", false, "Overwrite without prompting")
 }
