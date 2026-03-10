@@ -46,7 +46,7 @@ func PrintError(format string, args ...interface{}) {
 
 func PrintWarning(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	fmt.Println(WarningStyle.Render("⚠️  " + msg))
+	fmt.Println(WarningStyle.Render("⚠️ " + msg))
 }
 
 func PrintInfo(format string, args ...interface{}) {
@@ -66,7 +66,7 @@ func PrintUnlock(format string, args ...interface{}) {
 
 func PrintCloud(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	fmt.Println(InfoStyle.Render("☁️  " + msg))
+	fmt.Println(InfoStyle.Render("☁️ " + msg))
 }
 
 func PrintSave(format string, args ...interface{}) {
