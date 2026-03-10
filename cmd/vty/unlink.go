@@ -37,7 +37,6 @@ func runUnlink(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Check if session is active and logout first
 	sessionMgr := session.GetManager()
 	activeUsers := sessionMgr.All()
 	if len(activeUsers) > 0 {
@@ -69,16 +68,13 @@ func runUnlink(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Delete config.json
 	if err := os.Remove(configPath); err != nil {
 		logger.Error("Failed to delete config file", "error", err)
 		return fmt.Errorf("deleting config: %w", err)
 	}
 
-	// Clear all sessions
 	sessionMgr.Clear()
 
-	// Delete .vaulty directory (all local traces)
 	home, err := os.UserHomeDir()
 	if err == nil {
 		vautyDir := filepath.Join(home, ".vaulty")
@@ -87,7 +83,6 @@ func runUnlink(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Delete cache directory
 	if err == nil {
 		cacheDir := filepath.Join(home, ".vty", "cache")
 		if err := os.RemoveAll(cacheDir); err != nil && !os.IsNotExist(err) {
@@ -95,7 +90,6 @@ func runUnlink(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Clear password from storage
 	passStorage, err := password.NewStorage()
 	if err == nil {
 		if err := passStorage.Delete(); err != nil {

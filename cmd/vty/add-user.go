@@ -39,7 +39,6 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no vault initialized - run 'vty init' first")
 	}
 
-	// Validate current user is owner
 	if cfg.CurrentUserRole != "owner" {
 		return fmt.Errorf("only vault owner can add users")
 	}
@@ -58,7 +57,6 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Prompt for owner password to verify ownership
 	fmt.Println()
 	fmt.Println(ui.InfoStyle.Render("🔐 Verifying vault ownership"))
 	fmt.Println()
@@ -80,7 +78,6 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("form cancelled")
 	}
 
-	// Download and decrypt owner's key file
 	fmt.Println()
 	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Downloading keys/%s.enc...", cfg.CurrentUser)))
 
@@ -110,7 +107,6 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decryption failed")
 	}
 
-	// Validate new username not already in metadata
 	fmt.Println()
 	fmt.Println(ui.MutedStyle.Render("Checking metadata..."))
 
@@ -130,7 +126,6 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Prompt for new user password
 	fmt.Println()
 	fmt.Println(ui.InfoStyle.Render("🔑 Create new user password"))
 	fmt.Println()
@@ -169,7 +164,6 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("form cancelled")
 	}
 
-	// Encrypt master key with new user password
 	fmt.Println()
 	fmt.Println(ui.MutedStyle.Render("Encrypting master key..."))
 
@@ -181,13 +175,11 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	masterKeyBytes := crypto.SerializeEncryptedData(encryptedMasterKey)
 	masterKeyContent := base64.StdEncoding.EncodeToString(masterKeyBytes)
 
-	// Generate recovery seed for new user
 	recoverySeeds, err := crypto.GenerateRecoverySeed()
 	if err != nil {
 		return fmt.Errorf("generating recovery seed: %w", err)
 	}
 
-	// Update metadata
 	metadata.Users = append(metadata.Users, config.UserEntry{
 		Username:  username,
 		Role:      "viewer",
@@ -199,11 +191,9 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("marshaling metadata: %w", err)
 	}
 
-	// Upload files to GitHub
 	fmt.Println()
 	fmt.Println(ui.MutedStyle.Render("Uploading files to GitHub..."))
 
-	// Upload encrypted key
 	err = client.PutContent(ctx, owner, repo, fmt.Sprintf("keys/%s.enc", username), github.ContentRequest{
 		Message: fmt.Sprintf("Add user %s", username),
 		Content: masterKeyContent,
@@ -228,13 +218,11 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("uploading recovery seed: %w", err)
 	}
 
-	// Upload updated metadata
 	err = client.PutMetadata(ctx, owner, repo, metadataJSON)
 	if err != nil {
 		return fmt.Errorf("uploading metadata: %w", err)
 	}
 
-	// Display recovery seed
 	fmt.Println()
 	fmt.Println(ui.SuccessStyle.Render("✅ User created successfully!"))
 	fmt.Println()
@@ -243,7 +231,6 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	fmt.Println(ui.TitleStyle.Render(recoverySeeds))
 	fmt.Println()
 
-	// Ask to save seed to file
 	saveToFile, err := ui.AskConfirm("Save recovery seed to a file?", true)
 	if err != nil {
 		return fmt.Errorf("confirmation failed: %w", err)

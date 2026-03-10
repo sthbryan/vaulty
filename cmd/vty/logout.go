@@ -45,7 +45,6 @@ func runLogout(cmd *cobra.Command, args []string) error {
 		sm.Delete(cfg.CurrentUser)
 	}
 
-	// Clear current user from config
 	cfg.ClearCurrentUser()
 	if err := cfg.Save(""); err != nil {
 		return fmt.Errorf("failed to update config: %w", err)

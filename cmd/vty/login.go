@@ -40,7 +40,6 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("Vaulty not initialized. Run 'vty init' first")
 	}
 
-	// Check if session already active - prompt to re-login
 	if cfg.CurrentUser != "" {
 		relogin, err := ui.AskConfirm(fmt.Sprintf("Already logged in as %s. Re-login with different user?", cfg.CurrentUser), false)
 		if err != nil {
@@ -52,7 +51,6 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Prompt for username
 	var username string
 	defaultUsername := ""
 	if cfg.Metadata != nil && len(cfg.Metadata.Users) > 0 {
@@ -82,7 +80,6 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		username = defaultUsername
 	}
 
-	// Prompt for password
 	var masterPassword string
 	err = huh.NewInput().
 		Title("Master password").
@@ -100,7 +97,6 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("form cancelled")
 	}
 
-	// Get GitHub token and client
 	token, err := github.GetGitHubToken()
 	if err != nil {
 		return fmt.Errorf("GitHub authentication: %w", err)
@@ -115,7 +111,6 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Download keys/<username>.enc
 	fmt.Println(ui.MutedStyle.Render("Downloading encrypted keys..."))
 	keyPath := fmt.Sprintf("keys/%s.enc", username)
 	keyResp, err := client.GetContent(ctx, owner, repo, keyPath)
@@ -128,7 +123,6 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decoding key data: %w", err)
 	}
 
-	// Decrypt masterKey with password
 	fmt.Println(ui.MutedStyle.Render("Decrypting master key..."))
 	encryptedKey, err := crypto.DeserializeEncryptedData(keyData)
 	if err != nil {
@@ -147,7 +141,6 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decryption failed")
 	}
 
-	// Download vault.enc from GitHub
 	fmt.Println(ui.MutedStyle.Render("Downloading vault..."))
 	vaultResp, err := client.GetContent(ctx, owner, repo, "vault.enc")
 	if err != nil {
@@ -159,7 +152,6 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decoding vault data: %w", err)
 	}
 
-	// Decrypt vault with masterKey (do NOT save to disk yet)
 	fmt.Println(ui.MutedStyle.Render("Decrypting vault..."))
 	encryptedVault, err := crypto.DeserializeEncryptedData(vaultEncData)
 	if err != nil {
@@ -174,11 +166,10 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("vault decryption failed")
 	}
 
-	// Download metadata.vty and validate user exists
 	fmt.Println(ui.MutedStyle.Render("Validating user..."))
 	metadataResp, err := client.GetContent(ctx, owner, repo, "metadata.vty")
 	if err != nil {
-		// Fallback to metadata.json for backward compatibility
+
 		metadataResp, err = client.GetContent(ctx, owner, repo, "metadata.json")
 		if err != nil {
 			return fmt.Errorf("downloading metadata: %w", err)
@@ -195,7 +186,6 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("parsing metadata: %w", err)
 	}
 
-	// Find user in metadata
 	var userEntry *config.UserEntry
 	for i := range metadata.Users {
 		if metadata.Users[i].Username == username {
@@ -211,12 +201,10 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("user %q not found in vault metadata", username)
 	}
 
-	// Create session
 	fmt.Println(ui.MutedStyle.Render("Creating session..."))
 	sess := session.NewSession(username, userEntry.Role, masterKey, vaultData)
 	session.GetManager().Create(sess)
 
-	// Update config
 	cfg.SetCurrentUser(username, userEntry.Role)
 	if cfg.Metadata == nil {
 		cfg.Metadata = &metadata
@@ -228,7 +216,6 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("saving config: %w", err)
 	}
 
-	// Save vault cache
 	passStorage, err := password.NewStorage()
 	if err != nil {
 		return fmt.Errorf("password storage: %w", err)
@@ -237,7 +224,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	cacheManager := cache.NewCacheManager(passStorage)
 	if err := cacheManager.Save(username, vaultData); err != nil {
 		logger.Warn("failed to cache vault data", "error", err)
-		// Don't fail if cache save fails
+
 	}
 
 	fmt.Println()

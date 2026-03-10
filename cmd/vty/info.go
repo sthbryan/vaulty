@@ -103,7 +103,6 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	// Sort secrets by type then name
 	sort.Slice(secrets, func(i, j int) bool {
 		if secrets[i].Type == secrets[j].Type {
 			return secrets[i].Name < secrets[j].Name
@@ -118,11 +117,9 @@ func runInfo(cmd *cobra.Command, args []string) error {
 func renderDetailedVaultInfo(cfg *config.Config, secrets []models.SecretInfo, lastSync time.Time) {
 	fmt.Println()
 
-	// User info
 	fmt.Println(ui.MutedStyle.Render("User: " + cfg.CurrentUser + " (" + cfg.CurrentUserRole + ")"))
 	fmt.Println()
 
-	// Separate secrets by type
 	var envSecrets, sshSecrets []models.SecretInfo
 	for _, s := range secrets {
 		if s.Type == models.SecretTypeSSH {
@@ -132,21 +129,18 @@ func renderDetailedVaultInfo(cfg *config.Config, secrets []models.SecretInfo, la
 		}
 	}
 
-	// Render env vars table
 	if len(envSecrets) > 0 {
 		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== ENVIRONMENT VARIABLES ==="))
 		renderSecretsTable(envSecrets)
 		fmt.Println()
 	}
 
-	// Render ssh keys table
 	if len(sshSecrets) > 0 {
 		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== SSH KEYS ==="))
 		renderSecretsTable(sshSecrets)
 		fmt.Println()
 	}
 
-	// Render summary
 	fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== SUMMARY ==="))
 	totalSize := int64(0)
 	for _, s := range secrets {
