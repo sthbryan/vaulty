@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/DeadBryam/vaulty/internal/config"
@@ -102,13 +103,63 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	renderSecretTable(secrets)
+	// Sort secrets by type then name
+	sort.Slice(secrets, func(i, j int) bool {
+		if secrets[i].Type == secrets[j].Type {
+			return secrets[i].Name < secrets[j].Name
+		}
+		return secrets[i].Type < secrets[j].Type
+	})
+
+	renderDetailedVaultInfo(cfg, secrets, cfg.UpdatedAt)
 	return nil
 }
 
-func renderSecretTable(secrets []models.SecretInfo) {
+func renderDetailedVaultInfo(cfg *config.Config, secrets []models.SecretInfo, lastSync time.Time) {
 	fmt.Println()
 
+	// User info
+	fmt.Println(ui.MutedStyle.Render("User: " + cfg.CurrentUser + " (" + cfg.CurrentUserRole + ")"))
+	fmt.Println()
+
+	// Separate secrets by type
+	var envSecrets, sshSecrets []models.SecretInfo
+	for _, s := range secrets {
+		if s.Type == models.SecretTypeSSH {
+			sshSecrets = append(sshSecrets, s)
+		} else {
+			envSecrets = append(envSecrets, s)
+		}
+	}
+
+	// Render env vars table
+	if len(envSecrets) > 0 {
+		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== ENVIRONMENT VARIABLES ==="))
+		renderSecretsTable(envSecrets)
+		fmt.Println()
+	}
+
+	// Render ssh keys table
+	if len(sshSecrets) > 0 {
+		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== SSH KEYS ==="))
+		renderSecretsTable(sshSecrets)
+		fmt.Println()
+	}
+
+	// Render summary
+	fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== SUMMARY ==="))
+	totalSize := int64(0)
+	for _, s := range secrets {
+		totalSize += s.Size
+	}
+
+	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Total Secrets: %d", len(secrets))))
+	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Total Size: %s", formatSize(totalSize))))
+	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Last Sync: %s", formatTime(lastSync))))
+	fmt.Println()
+}
+
+func renderSecretsTable(secrets []models.SecretInfo) {
 	t := table.New().
 		Border(lipgloss.NormalBorder()).
 		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
@@ -127,15 +178,59 @@ func renderSecretTable(secrets []models.SecretInfo) {
 		t.Row(
 			secret.Name,
 			string(secret.Type),
-			fmt.Sprintf("%d bytes", secret.Size),
-			secret.UpdatedAt.Format("2006-01-02 15:04"),
+			formatSize(secret.Size),
+			formatTime(secret.UpdatedAt),
 		)
 	}
 
 	fmt.Println(t.Render())
-	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Total: %d secrets", len(secrets))))
-	fmt.Println()
+}
+
+func formatSize(bytes int64) string {
+	const (
+		B  = 1
+		KB = 1024 * B
+		MB = 1024 * KB
+	)
+	switch {
+	case bytes < KB:
+		return fmt.Sprintf("%dB", bytes)
+	case bytes < MB:
+		return fmt.Sprintf("%.1fKB", float64(bytes)/float64(KB))
+	default:
+		return fmt.Sprintf("%.1fMB", float64(bytes)/float64(MB))
+	}
+}
+
+func formatTime(t time.Time) string {
+	if t.IsZero() {
+		return "never"
+	}
+	duration := time.Since(t)
+	if duration < time.Minute {
+		return "just now"
+	}
+	if duration < time.Hour {
+		return fmt.Sprintf("%d mins ago", int(duration.Minutes()))
+	}
+	if duration < 24*time.Hour {
+		return fmt.Sprintf("%d hours ago", int(duration.Hours()))
+	}
+	days := int(duration.Hours()) / 24
+	if days == 1 {
+		return "1 day ago"
+	}
+	if days < 7 {
+		return fmt.Sprintf("%d days ago", days)
+	}
+	weeks := days / 7
+	if weeks == 1 {
+		return "1 week ago"
+	}
+	if weeks < 4 {
+		return fmt.Sprintf("%d weeks ago", weeks)
+	}
+	return t.Format("2006-01-02")
 }
 
 func init() {
