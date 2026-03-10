@@ -102,10 +102,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Checking repository %s...", repoFull)))
-
-	canaryResp, err := client.GetContent(ctx, owner, repo, ".vaulty/canary.vty")
-	isNewRepo := err != nil
+	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Initializing vault in %s...", repoFull)))
 
 	cfg.SetRepo(repoFull)
 
@@ -114,14 +111,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("password storage: %w", err)
 	}
 
-	if isNewRepo {
-		if err := initializeNewRepo(ctx, client, owner, repo, cfg, passStorage); err != nil {
-			return err
-		}
-	} else {
-		if err := linkExistingRepo(ctx, client, owner, repo, canaryResp, cfg, passStorage); err != nil {
-			return err
-		}
+	if err := initializeNewRepo(ctx, client, owner, repo, cfg, passStorage); err != nil {
+		return err
 	}
 
 	if err := cfg.Save(""); err != nil {
@@ -355,89 +346,6 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 	fmt.Println()
 
 	cfg.Metadata = metadata
-
-	return nil
-}
-
-func linkExistingRepo(ctx context.Context, client *github.Client, owner, repo string, canaryResp *github.ContentResponse, cfg *config.Config, passStorage password.Storage) error {
-	fmt.Println(ui.InfoStyle.Render("🔗 Linking existing repository"))
-	fmt.Println()
-
-	canaryData, err := client.DecodeContent(canaryResp)
-	if err != nil {
-		return fmt.Errorf("decoding canary: %w", err)
-	}
-
-	var password string
-	err = huh.NewInput().
-		Title("Master password").
-		Placeholder("Enter your master password").
-		EchoMode(huh.EchoModePassword).
-		Value(&password).
-		Run()
-	if err != nil {
-		return fmt.Errorf("form cancelled")
-	}
-
-	saltResp, err := client.GetContent(ctx, owner, repo, ".vaulty/salt.vty")
-	if err != nil {
-		return fmt.Errorf("device salt not found in vault - this vault may be from an older version. Please recreate the vault with 'vty unlink' and 'vty init'")
-	}
-
-	saltData, err := client.DecodeContent(saltResp)
-	if err != nil {
-		return fmt.Errorf("decoding device salt: %w", err)
-	}
-
-	deviceSalt, err := crypto.DecryptDeviceSalt(saltData, password)
-	if err != nil {
-		fmt.Println()
-		fmt.Println(ui.ErrorStyle.Render("❌ Failed to decrypt vault data"))
-		fmt.Println()
-		fmt.Println(ui.MutedStyle.Render("This could mean:"))
-		fmt.Println(ui.MutedStyle.Render("  • Wrong password"))
-		fmt.Println(ui.MutedStyle.Render("  • Corrupted vault data"))
-		fmt.Println()
-		fmt.Println(ui.InfoStyle.Render("If you forgot your password:"))
-		fmt.Println(ui.MutedStyle.Render("  vty recover --seed \"your 12-word seed phrase\""))
-		fmt.Println()
-		return fmt.Errorf("decryption failed")
-	}
-
-	cfg.DeviceSalt = deviceSalt
-
-	if err := crypto.ValidateCanary(canaryData, password, deviceSalt); err != nil {
-		fmt.Println()
-		fmt.Println(ui.ErrorStyle.Render("❌ Invalid vault data"))
-		fmt.Println()
-		fmt.Println(ui.MutedStyle.Render("The vault data may be corrupted."))
-		fmt.Println()
-		return fmt.Errorf("canary validation failed")
-	}
-
-	if err := passStorage.Set(password); err != nil {
-		return fmt.Errorf("storing password: %w", err)
-	}
-
-	metadataResp, err := client.GetContent(ctx, owner, repo, ".vaulty/metadata.json")
-	if err != nil {
-		return fmt.Errorf("metadata not found: %w", err)
-	}
-
-	metadataData, err := client.DecodeContent(metadataResp)
-	if err != nil {
-		return fmt.Errorf("decoding metadata: %w", err)
-	}
-
-	var metadata config.Metadata
-	if err := json.Unmarshal(metadataData, &metadata); err != nil {
-		return fmt.Errorf("parsing metadata: %w", err)
-	}
-
-	cfg.Metadata = &metadata
-
-	fmt.Println()
-	fmt.Println(ui.SuccessStyle.Render("✅ Linked successfully! Welcome back."))
 
 	return nil
 }

@@ -140,22 +140,6 @@ func runUnlock(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decryption failed")
 	}
 
-	// Validate with canary (password + deviceSalt)
-	fmt.Println(ui.MutedStyle.Render("Validating credentials..."))
-	canaryResp, errCanary := client.GetContent(ctx, owner, repo, ".vaulty/canary.vty")
-	if errCanary == nil {
-		canaryData, errDecode := client.DecodeContent(canaryResp)
-		if errDecode == nil {
-			if errVal := crypto.ValidateCanary(canaryData, masterPassword, cfg.DeviceSalt); errVal != nil {
-				fmt.Println()
-				fmt.Println(ui.ErrorStyle.Render("❌ Invalid credentials"))
-				fmt.Println(ui.MutedStyle.Render("Canary validation failed"))
-				fmt.Println()
-				return fmt.Errorf("canary validation failed")
-			}
-		}
-	}
-
 	// Download vault.enc from GitHub
 	fmt.Println(ui.MutedStyle.Render("Downloading vault..."))
 	vaultResp, err := client.GetContent(ctx, owner, repo, "vault.enc")
