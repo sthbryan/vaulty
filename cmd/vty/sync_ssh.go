@@ -190,11 +190,11 @@ func runSyncSSH(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	logger.Info("✅ SSH key synced successfully!")
-	logger.Info("   Name: %s", name)
-	logger.Info("   Path: %s", remotePath)
-	logger.Info("   Original size: %s", ui.FormatBytes(int64(len(keyData))))
-	logger.Info("   Compressed: %s", ui.FormatBytes(int64(len(compressed))))
-	logger.Info("   Encrypted: %s", ui.FormatBytes(int64(len(vaultJSON))))
+	logger.Info(fmt.Sprintf("   Name: %s", name))
+	logger.Info(fmt.Sprintf("   Path: %s", remotePath))
+	logger.Info(fmt.Sprintf("   Original size: %s", ui.FormatBytes(int64(len(keyData)))))
+	logger.Info(fmt.Sprintf("   Compressed: %s", ui.FormatBytes(int64(len(compressed)))))
+	logger.Info(fmt.Sprintf("   Encrypted: %s", ui.FormatBytes(int64(len(vaultJSON)))))
 
 	return nil
 }
