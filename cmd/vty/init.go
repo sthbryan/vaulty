@@ -86,7 +86,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	client := github.NewClient(token)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	_, err = client.GetContent(ctx, owner, repo, ".vaulty/metadata.vty")
