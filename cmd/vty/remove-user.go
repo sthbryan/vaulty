@@ -210,34 +210,16 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	ui.PrintInfo("Re-encrypting new master key for remaining users...")
+	ui.PrintInfo("Re-encrypting new master key for owner...")
 
-	keysToUpload := make(map[string][]byte)
+	encryptedNewKey, err := crypto.EncryptMasterKeyWithPassword(newMasterKey, currentPassword)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt master key for owner: %w", err)
+	}
 
-	for _, u := range metadata.Users {
-		var userPassword string
-
-		if u.Username == cfg.CurrentUser {
-			userPassword = currentPassword
-		} else {
-			var err error
-			userPassword, err = ui.AskPassword(fmt.Sprintf("Enter password for user %s", u.Username))
-			if err != nil {
-				return fmt.Errorf("password prompt failed for %s: %w", u.Username, err)
-			}
-		}
-
-		encryptedNewKey, err := crypto.EncryptMasterKeyWithPassword(newMasterKey, userPassword)
-		if err != nil {
-			return fmt.Errorf("failed to encrypt master key for %s: %w", u.Username, err)
-		}
-
-		keyJSON, err := json.Marshal(encryptedNewKey)
-		if err != nil {
-			return fmt.Errorf("failed to marshal encrypted key: %w", err)
-		}
-
-		keysToUpload[u.Username] = keyJSON
+	ownerKeyJSON, err := json.Marshal(encryptedNewKey)
+	if err != nil {
+		return fmt.Errorf("failed to marshal encrypted key: %w", err)
 	}
 
 	fmt.Println()
@@ -258,16 +240,14 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to upload metadata: %w", err)
 	}
 
-	for username, keyJSON := range keysToUpload {
-		err = client.PutUserKeys(ctx, owner, repoName, username, keyJSON)
-		if err != nil {
-			return fmt.Errorf("failed to upload keys for %s: %w", username, err)
-		}
+	err = client.PutUserKeys(ctx, owner, repoName, cfg.CurrentUser, ownerKeyJSON)
+	if err != nil {
+		return fmt.Errorf("failed to upload owner key: %w", err)
 	}
 
 	ui.PrintInfo("Deleting removed user's key file...")
 
-	removedUserKeyPath := fmt.Sprintf("keys/%s.enc", username)
+	removedUserKeyPath := fmt.Sprintf(".vaulty/keys/%s.enc", username)
 	removedUserKeyResp, err := client.GetContent(ctx, owner, repoName, removedUserKeyPath)
 	if err == nil && removedUserKeyResp != nil {
 		err = client.DeleteContent(ctx, owner, repoName, removedUserKeyPath, removedUserKeyResp.Sha)
@@ -276,8 +256,29 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	ui.PrintInfo("Deleting removed user's SSH keys...")
+	sshDirPath := fmt.Sprintf("ssh/%s", username)
+	sshItems, err := client.ListDirectory(ctx, owner, repoName, sshDirPath)
+	if err == nil {
+		for _, item := range sshItems {
+			itemPath := fmt.Sprintf("%s/%s", sshDirPath, item.Name)
+			itemResp, err := client.GetContent(ctx, owner, repoName, itemPath)
+			if err == nil && itemResp != nil {
+				err = client.DeleteContent(ctx, owner, repoName, itemPath, itemResp.Sha)
+				if err != nil {
+					logger.Warn("failed to delete SSH key", "path", itemPath, "error", err)
+				}
+			}
+		}
+		gitkeepPath := fmt.Sprintf("%s/.gitkeep", sshDirPath)
+		gitkeepResp, err := client.GetContent(ctx, owner, repoName, gitkeepPath)
+		if err == nil && gitkeepResp != nil {
+			client.DeleteContent(ctx, owner, repoName, gitkeepPath, gitkeepResp.Sha)
+		}
+	}
+
 	fmt.Println()
-	ui.PrintSuccess("✅ %s removed, masterKey rotated, all users re-encrypted", username)
+	ui.PrintSuccess("%s removed, masterKey rotated, all users re-encrypted", username)
 	fmt.Println()
 
 	return nil
