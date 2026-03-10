@@ -187,10 +187,20 @@ func (c *Client) DecodeContent(content *ContentResponse) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(content.Content)
 }
 
+func (c *Client) EncodeContent(data []byte) string {
+	return base64.StdEncoding.EncodeToString(data)
+}
+
 type DeleteRequest struct {
 	Message string `json:"message"`
 	Sha     string `json:"sha"`
 	Branch  string `json:"branch,omitempty"`
+}
+
+type UserEntry struct {
+	Username  string `json:"username"`
+	PublicKey string `json:"public_key"`
+	AddedAt   string `json:"added_at"`
 }
 
 func (c *Client) DeleteContent(ctx context.Context, owner, repo, path, sha string) error {
@@ -228,4 +238,120 @@ func (c *Client) DeleteContent(ctx context.Context, owner, repo, path, sha strin
 	}
 
 	return nil
+}
+
+func (c *Client) GetUserKeys(ctx context.Context, owner, repo, username string) (*ContentResponse, error) {
+	path := fmt.Sprintf(".vaulty/keys/%s.enc", username)
+	return c.GetContent(ctx, owner, repo, path)
+}
+
+func (c *Client) PutUserKeys(ctx context.Context, owner, repo, username string, data []byte) error {
+	path := fmt.Sprintf(".vaulty/keys/%s.enc", username)
+	sha, err := c.getContentSha(ctx, owner, repo, path)
+	if err != nil && !strings.Contains(err.Error(), "404") {
+		return fmt.Errorf("failed to get current sha: %w", err)
+	}
+
+	req := ContentRequest{
+		Message: fmt.Sprintf("Update keys for %s", username),
+		Content: c.EncodeContent(data),
+		Sha:     sha,
+	}
+
+	return c.PutContent(ctx, owner, repo, path, req)
+}
+
+func (c *Client) GetMetadata(ctx context.Context, owner, repo string) ([]byte, error) {
+	path := ".vaulty/metadata.json"
+	content, err := c.GetContent(ctx, owner, repo, path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get metadata: %w", err)
+	}
+	return c.DecodeContent(content)
+}
+
+func (c *Client) PutMetadata(ctx context.Context, owner, repo string, metadata []byte) error {
+	path := ".vaulty/metadata.json"
+	sha, err := c.getContentSha(ctx, owner, repo, path)
+	if err != nil && !strings.Contains(err.Error(), "404") {
+		return fmt.Errorf("failed to get current sha: %w", err)
+	}
+
+	req := ContentRequest{
+		Message: "Update metadata.json via Vaulty",
+		Content: c.EncodeContent(metadata),
+		Sha:     sha,
+	}
+
+	return c.PutContent(ctx, owner, repo, path, req)
+}
+
+func (c *Client) GetRecoverySeed(ctx context.Context, owner, repo, username string) (*ContentResponse, error) {
+	path := fmt.Sprintf(".vaulty/recovery/%s.recovery", username)
+	return c.GetContent(ctx, owner, repo, path)
+}
+
+func (c *Client) PutRecoverySeed(ctx context.Context, owner, repo, username string, data []byte) error {
+	path := fmt.Sprintf(".vaulty/recovery/%s.recovery", username)
+	sha, err := c.getContentSha(ctx, owner, repo, path)
+	if err != nil && !strings.Contains(err.Error(), "404") {
+		return fmt.Errorf("failed to get current sha: %w", err)
+	}
+
+	req := ContentRequest{
+		Message: fmt.Sprintf("Update recovery seed for %s", username),
+		Content: c.EncodeContent(data),
+		Sha:     sha,
+	}
+
+	return c.PutContent(ctx, owner, repo, path, req)
+}
+
+func (c *Client) GetUserList(ctx context.Context, owner, repo string) ([]UserEntry, error) {
+	metadataBytes, err := c.GetMetadata(ctx, owner, repo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get metadata: %w", err)
+	}
+
+	var metadata map[string]interface{}
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		return nil, fmt.Errorf("failed to parse metadata: %w", err)
+	}
+
+	users, ok := metadata["users"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("users field not found or not an array in metadata")
+	}
+
+	var userList []UserEntry
+	for _, u := range users {
+		userMap, ok := u.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		entry := UserEntry{
+			Username:  toString(userMap["username"]),
+			PublicKey: toString(userMap["public_key"]),
+			AddedAt:   toString(userMap["added_at"]),
+		}
+		userList = append(userList, entry)
+	}
+
+	return userList, nil
+}
+
+func (c *Client) getContentSha(ctx context.Context, owner, repo, path string) (string, error) {
+	content, err := c.GetContent(ctx, owner, repo, path)
+	if err != nil {
+		return "", err
+	}
+	return content.Sha, nil
+}
+
+func toString(v interface{}) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
