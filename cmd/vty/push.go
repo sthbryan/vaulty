@@ -25,7 +25,13 @@ var (
 )
 
 var pushCmd = &cobra.Command{
-	Use:   "push <name> <path>",
+	Use:   "push",
+	Short: "Push secrets to Vaulty",
+	Long:  `Push environment files or SSH keys to your Vaulty repository.`,
+}
+
+var pushEnvCmd = &cobra.Command{
+	Use:   "env <name> <path>",
 	Short: "Push an environment file to Vaulty",
 	Long: `Compress, encrypt, and upload an environment file to your Vaulty repository.
 
@@ -35,36 +41,54 @@ The file will be:
   3. Uploaded to your GitHub repository in the envs/ directory
 
 Examples:
-  vty push production .env.production
-  vty push staging .env.staging --force
-  vty push api .env --password-stdin < password.txt`,
+  vty push env production .env.production
+  vty push env staging .env.staging --force`,
 	Args: cobra.ExactArgs(2),
-	RunE: runPush,
+	RunE: runPushEnv,
 }
 
-func runPush(cmd *cobra.Command, args []string) error {
-	name := args[0]
-	path := args[1]
+var pushSSHCmd = &cobra.Command{
+	Use:   "ssh <name> <path>",
+	Short: "Push an SSH key to Vaulty",
+	Long: `Compress, encrypt, and upload an SSH private key to your Vaulty repository.
 
+The file will be:
+  1. Compressed using gzip for efficiency
+  2. Encrypted using AES-256-GCM with your password
+  3. Uploaded to ssh/{username}/{name}.vty in your repository
+
+Only owners and editors can push SSH keys to their own directory.
+Viewers cannot push any secrets.
+
+Examples:
+  vty push ssh laptop ~/.ssh/id_rsa
+  vty push ssh server ~/.ssh/server_key --force`,
+	Args: cobra.ExactArgs(2),
+	RunE: runPushSSH,
+}
+
+func checkPushPermissions(cfg *config.Config) error {
+	role := cfg.GetRole()
+	if role == "" {
+		return fmt.Errorf("no active session. Run 'vty login' first")
+	}
+	if role == "viewer" {
+		return fmt.Errorf("viewers cannot push secrets. Contact the repository owner for access")
+	}
+	return nil
+}
+
+func validateName(name string) error {
 	if strings.Contains(name, "/") || strings.Contains(name, "\\") {
 		return fmt.Errorf("name cannot contain path separators")
 	}
 	if strings.HasPrefix(name, ".") {
 		return fmt.Errorf("name cannot start with a dot")
 	}
+	return nil
+}
 
-	cfg, err := config.Load("")
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("configuration error: %w", err)
-	}
-
-	if cfg.CurrentUser == "" {
-		return fmt.Errorf("no active session. Run 'vty login' first")
-	}
-
+func validateFile(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -75,27 +99,45 @@ func runPush(cmd *cobra.Command, args []string) error {
 	if info.IsDir() {
 		return fmt.Errorf("path must be a file, not a directory: %s", path)
 	}
+	return nil
+}
+
+func loadConfigAndClient() (*config.Config, *github.Client, error) {
+	cfg, err := config.Load("")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load config: %w", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("configuration error: %w", err)
+	}
 
 	token, err := github.GetGitHubToken()
 	if err != nil {
-		return fmt.Errorf("failed to get GitHub token: %w", err)
+		return nil, nil, fmt.Errorf("failed to get GitHub token: %w", err)
 	}
 	client := github.NewClient(token)
 
+	return cfg, client, nil
+}
+
+func getPassword() (string, error) {
 	storage, err := password.NewStorage()
 	if err != nil {
-		return fmt.Errorf("failed to create password storage: %w", err)
+		return "", fmt.Errorf("failed to create password storage: %w", err)
 	}
 	pwd, err := storage.Get()
 	if err != nil {
-		return fmt.Errorf("Password not found. Run 'vty init' or 'vty recover'")
+		return "", fmt.Errorf("password not found. Run 'vty init' or 'vty recover'")
 	}
+	return pwd, nil
+}
 
+func encryptAndPrepareFile(path, name string, secretType models.SecretType, pwd string) (*models.VaultFile, int64, error) {
 	ui.PrintInfo("Reading file: %s", path)
 
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
+		return nil, 0, fmt.Errorf("failed to read file: %w", err)
 	}
 
 	originalSize := int64(len(content))
@@ -107,7 +149,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 	ui.PrintInfo("Compressing...")
 	compressed, err := compress.Compress(content)
 	if err != nil {
-		return fmt.Errorf("failed to compress: %w", err)
+		return nil, 0, fmt.Errorf("failed to compress: %w", err)
 	}
 
 	compressedSize := int64(len(compressed))
@@ -118,13 +160,13 @@ func runPush(cmd *cobra.Command, args []string) error {
 	ui.PrintLock("Encrypting...")
 	encrypted, err := crypto.Encrypt(compressed, pwd)
 	if err != nil {
-		return fmt.Errorf("failed to encrypt: %w", err)
+		return nil, 0, fmt.Errorf("failed to encrypt: %w", err)
 	}
 
 	vaultFile := models.VaultFile{
 		Metadata: models.SecretMetadata{
 			Name:      name,
-			Type:      models.SecretTypeEnv,
+			Type:      secretType,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 			Size:      originalSize,
@@ -133,24 +175,21 @@ func runPush(cmd *cobra.Command, args []string) error {
 		Data: *encrypted,
 	}
 
-	vaultData, err := json.MarshalIndent(vaultFile, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal vault file: %w", err)
-	}
+	return &vaultFile, originalSize, nil
+}
 
+func uploadToGitHub(client *github.Client, cfg *config.Config, remotePath string, vaultData []byte, name string) error {
 	ctx := context.Background()
 	owner, repoName, err := github.ParseRepo(cfg.Repo)
 	if err != nil {
 		return fmt.Errorf("invalid repo format: %w", err)
 	}
 
-	remotePath := fmt.Sprintf("envs/%s.vty", name)
 	ui.PrintCloud("Checking remote: %s/%s/%s", owner, repoName, remotePath)
 
 	var existingSha string
 	existingContent, err := client.GetContent(ctx, owner, repoName, remotePath)
 	if err == nil && existingContent != nil {
-
 		if !pushForce {
 			ui.PrintWarning("File already exists on remote")
 			confirmed, confirmErr := ui.AskConfirm("Overwrite existing file?", false)
@@ -184,6 +223,50 @@ func runPush(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to upload: %w", err)
 	}
 
+	return nil
+}
+
+func runPushEnv(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	path := args[1]
+
+	if err := validateName(name); err != nil {
+		return err
+	}
+
+	cfg, client, err := loadConfigAndClient()
+	if err != nil {
+		return err
+	}
+
+	if err := checkPushPermissions(cfg); err != nil {
+		return err
+	}
+
+	if err := validateFile(path); err != nil {
+		return err
+	}
+
+	pwd, err := getPassword()
+	if err != nil {
+		return err
+	}
+
+	vaultFile, originalSize, err := encryptAndPrepareFile(path, name, models.SecretTypeEnv, pwd)
+	if err != nil {
+		return err
+	}
+
+	vaultData, err := json.MarshalIndent(vaultFile, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal vault file: %w", err)
+	}
+
+	remotePath := fmt.Sprintf("envs/%s.vty", name)
+	if err := uploadToGitHub(client, cfg, remotePath, vaultData, name); err != nil {
+		return err
+	}
+
 	ui.PrintSuccess("Pushed successfully!")
 	fmt.Println()
 	fmt.Printf("  Name:    %s\n", name)
@@ -196,7 +279,110 @@ func runPush(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func runPushSSH(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	path := args[1]
+
+	if err := validateName(name); err != nil {
+		return err
+	}
+
+	cfg, client, err := loadConfigAndClient()
+	if err != nil {
+		return err
+	}
+
+	if err := checkPushPermissions(cfg); err != nil {
+		return err
+	}
+
+	if cfg.CurrentUser == "" {
+		return fmt.Errorf("no active user session. Run 'vty login' first")
+	}
+
+	if err := validateFile(path); err != nil {
+		return err
+	}
+
+	pwd, err := getPassword()
+	if err != nil {
+		return err
+	}
+
+	vaultFile, originalSize, err := encryptAndPrepareFile(path, name, models.SecretTypeSSH, pwd)
+	if err != nil {
+		return err
+	}
+
+	vaultData, err := json.MarshalIndent(vaultFile, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal vault file: %w", err)
+	}
+
+	remotePath := fmt.Sprintf("ssh/%s/%s.vty", cfg.CurrentUser, name)
+
+	ctx := context.Background()
+	owner, repoName, err := github.ParseRepo(cfg.Repo)
+	if err != nil {
+		return fmt.Errorf("invalid repo format: %w", err)
+	}
+
+	ui.PrintCloud("Ensuring SSH directory exists for user: %s", cfg.CurrentUser)
+	if err := ensureSSHUserDir(ctx, client, owner, repoName, cfg.CurrentUser); err != nil {
+		return fmt.Errorf("failed to ensure SSH user directory: %w", err)
+	}
+
+	if err := uploadToGitHub(client, cfg, remotePath, vaultData, name); err != nil {
+		return err
+	}
+
+	ui.PrintSuccess("Pushed SSH key successfully!")
+	fmt.Println()
+	fmt.Printf("  Name:    %s\n", name)
+	fmt.Printf("  User:    %s\n", cfg.CurrentUser)
+	fmt.Printf("  Path:    %s\n", remotePath)
+	fmt.Printf("  Size:    %s → %s\n",
+		ui.FormatBytes(originalSize),
+		ui.FormatBytes(int64(len(vaultData))))
+	fmt.Printf("  Repo:    %s\n", cfg.Repo)
+
+	return nil
+}
+
+func ensureSSHUserDir(ctx context.Context, client *github.Client, owner, repo, username string) error {
+	userDir := fmt.Sprintf("ssh/%s", username)
+	placeholderPath := fmt.Sprintf("%s/.gitkeep", userDir)
+
+	_, err := client.GetContent(ctx, owner, repo, userDir)
+	if err == nil {
+		return nil
+	}
+
+	_, err = client.GetContent(ctx, owner, repo, placeholderPath)
+	if err == nil {
+		return nil
+	}
+
+	emptyContent := base64.StdEncoding.EncodeToString([]byte{})
+	req := github.ContentRequest{
+		Message: fmt.Sprintf("Create SSH directory for user: %s", username),
+		Content: emptyContent,
+	}
+
+	if err := client.PutContent(ctx, owner, repo, placeholderPath, req); err != nil {
+		if !strings.Contains(err.Error(), "422") {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func init() {
 	rootCmd.AddCommand(pushCmd)
-	pushCmd.Flags().BoolVarP(&pushForce, "force", "f", false, "Overwrite without prompting")
+	pushCmd.AddCommand(pushEnvCmd)
+	pushCmd.AddCommand(pushSSHCmd)
+
+	pushEnvCmd.Flags().BoolVarP(&pushForce, "force", "f", false, "Overwrite without prompting")
+	pushSSHCmd.Flags().BoolVarP(&pushForce, "force", "f", false, "Overwrite without prompting")
 }
