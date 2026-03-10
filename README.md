@@ -185,7 +185,6 @@ vty logout
 | Command | Description | Example |
 |---------|-------------|---------|
 | `vty sync <name> <path>` | Sync an environment file to vault | `vty sync api .env` |
-| `vty sync-ssh <name> <key_path>` | Sync an SSH private key | `vty sync-ssh work ~/.ssh/id_rsa` |
 | `vty push <name>` | Push secrets to vault | `vty push api` |
 | `vty pull <name>` | Pull and decrypt secrets | `vty pull api` |
 | `vty list` | List all secrets in the vault | `vty list` |
