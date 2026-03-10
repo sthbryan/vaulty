@@ -253,12 +253,12 @@ func (c *Client) DeleteContent(ctx context.Context, owner, repo, path, sha strin
 }
 
 func (c *Client) GetUserKeys(ctx context.Context, owner, repo, username string) (*ContentResponse, error) {
-	path := fmt.Sprintf(".vaulty/keys/%s.enc", username)
+	path := fmt.Sprintf(".vaulty/keys/%s.vty", username)
 	return c.GetContent(ctx, owner, repo, path)
 }
 
 func (c *Client) PutUserKeys(ctx context.Context, owner, repo, username string, data []byte) error {
-	path := fmt.Sprintf(".vaulty/keys/%s.enc", username)
+	path := fmt.Sprintf(".vaulty/keys/%s.vty", username)
 	sha, err := c.getContentSha(ctx, owner, repo, path)
 	if err != nil {
 		if !strings.Contains(err.Error(), "404") {
@@ -304,12 +304,12 @@ func (c *Client) PutMetadata(ctx context.Context, owner, repo string, metadata [
 }
 
 func (c *Client) GetRecoverySeed(ctx context.Context, owner, repo, username string) (*ContentResponse, error) {
-	path := fmt.Sprintf(".vaulty/recovery/%s.recovery.enc", username)
+	path := fmt.Sprintf(".vaulty/recovery/%s.recovery.vty", username)
 	return c.GetContent(ctx, owner, repo, path)
 }
 
 func (c *Client) PutRecoverySeed(ctx context.Context, owner, repo, username string, data []byte) error {
-	path := fmt.Sprintf(".vaulty/recovery/%s.recovery.enc", username)
+	path := fmt.Sprintf(".vaulty/recovery/%s.recovery.vty", username)
 	sha, err := c.getContentSha(ctx, owner, repo, path)
 	if err != nil && !strings.Contains(err.Error(), "404") {
 		return fmt.Errorf("failed to get current sha: %w", err)
@@ -325,12 +325,12 @@ func (c *Client) PutRecoverySeed(ctx context.Context, owner, repo, username stri
 }
 
 func (c *Client) GetVault(ctx context.Context, owner, repo string) (*ContentResponse, error) {
-	path := ".vaulty/vault.enc"
+	path := ".vaulty/vault.vty"
 	return c.GetContent(ctx, owner, repo, path)
 }
 
 func (c *Client) PutVault(ctx context.Context, owner, repo string, data []byte) error {
-	path := ".vaulty/vault.enc"
+	path := ".vaulty/vault.vty"
 	sha, err := c.getContentSha(ctx, owner, repo, path)
 	action := "Update"
 	if err != nil {
