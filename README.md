@@ -295,7 +295,7 @@ ssh/
 └── bob/
     └── personal.vty
 .vaulty/
-├── metadata.json          ← Repo owner, user list, version
+├── metadata.vty          ← Repo owner, user list, version
 └── recovery/
     ├── ana.recovery       ← Ana's recovery seed phrase
     └── pablo.recovery     ← Pablo's recovery seed phrase

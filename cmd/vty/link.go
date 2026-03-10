@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/DeadBryam/vaulty/internal/config"
+	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/charmbracelet/huh"
@@ -32,43 +33,38 @@ func runLink(cmd *cobra.Command, args []string) error {
 
 	cfg, err := config.Load("")
 	if err != nil {
-		cfg = &config.Config{}
+		return fmt.Errorf("loading config: %w", err)
 	}
 
+	var repoFull string
+
+	defaultRepo := ""
 	if cfg.Repo != "" {
-		alreadyLinked, err := ui.AskConfirm(fmt.Sprintf("Already linked to %s. Replace with new vault?", cfg.Repo), false)
-		if err != nil {
-			return fmt.Errorf("confirmation failed: %w", err)
-		}
-		if !alreadyLinked {
-			fmt.Println("Link cancelled")
-			return nil
-		}
+		defaultRepo = cfg.Repo
 	}
 
-	fmt.Println()
-	fmt.Println(ui.TitleStyle.Render("🔗 Link to existing Vaulty vault"))
-	fmt.Println()
-
-	var repoInput string
 	err = huh.NewInput().
-		Title("Repository").
-		Placeholder("owner/repo").
-		Value(&repoInput).
+		Title("GitHub Repository").
+		Placeholder(defaultRepo).
+		Value(&repoFull).
 		Validate(func(s string) error {
 			if s == "" {
-				return fmt.Errorf("repository is required")
+				if defaultRepo != "" {
+					repoFull = defaultRepo
+					return nil
+				}
+				return fmt.Errorf("GitHub repository is required (format: owner/repo)")
 			}
-			_, _, err := github.ParseRepo(s)
-			return err
+			return nil
 		}).
 		Run()
 	if err != nil {
 		return fmt.Errorf("form cancelled")
 	}
 
-	owner, repo, _ := github.ParseRepo(repoInput)
-	repoFull := fmt.Sprintf("%s/%s", owner, repo)
+	if repoFull == "" {
+		repoFull = defaultRepo
+	}
 
 	token, err := github.GetGitHubToken()
 	if err != nil {
@@ -76,6 +72,11 @@ func runLink(cmd *cobra.Command, args []string) error {
 	}
 
 	client := github.NewClient(token)
+	owner, repo, err := github.ParseRepo(repoFull)
+	if err != nil {
+		return fmt.Errorf("invalid repository format: %w", err)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -92,8 +93,13 @@ func runLink(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decoding metadata: %w", err)
 	}
 
+	metadataJSON, err := crypto.DecompressHex(string(metadataEncData))
+	if err != nil {
+		return fmt.Errorf("decompressing metadata: %w", err)
+	}
+
 	var metadata config.Metadata
-	if err := json.Unmarshal(metadataEncData, &metadata); err != nil {
+	if err := json.Unmarshal(metadataJSON, &metadata); err != nil {
 		return fmt.Errorf("parsing metadata: %w", err)
 	}
 
@@ -105,14 +111,14 @@ func runLink(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
-	fmt.Println(ui.SuccessStyle.Render(fmt.Sprintf("✅ Linked to vault: %s", repoFull)))
+	fmt.Println(ui.SuccessStyle.Render(fmt.Sprintf("✅ Linked to %s", repoFull)))
 	fmt.Println()
-	fmt.Println(ui.InfoStyle.Render("Available users:"))
+	fmt.Println(ui.MutedStyle.Render("Found users:"))
 	for _, user := range metadata.Users {
-		fmt.Printf("  • %s (%s)\n", user.Username, user.Role)
+		fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("  • %s (%s)", user.Username, user.Role)))
 	}
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Run 'vty login' to authenticate and access the vault."))
+	fmt.Println(ui.MutedStyle.Render("Run 'vty login' to authenticate"))
 
 	return nil
 }

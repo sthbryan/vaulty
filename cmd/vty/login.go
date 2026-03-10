@@ -128,8 +128,13 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decoding metadata: %w", err)
 	}
 
+	metadataJSON, err := crypto.DecompressHex(string(metadataEncData))
+	if err != nil {
+		return fmt.Errorf("decompressing metadata: %w", err)
+	}
+
 	var metadata config.Metadata
-	if err := json.Unmarshal(metadataEncData, &metadata); err != nil {
+	if err := json.Unmarshal(metadataJSON, &metadata); err != nil {
 		return fmt.Errorf("parsing metadata: %w", err)
 	}
 

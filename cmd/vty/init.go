@@ -261,7 +261,12 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		return fmt.Errorf("marshaling metadata: %w", err)
 	}
 
-	metadataContent := base64.StdEncoding.EncodeToString(metadataJSON)
+	metadataHex, err := crypto.CompressHex(metadataJSON)
+	if err != nil {
+		return fmt.Errorf("compressing metadata: %w", err)
+	}
+
+	metadataContent := base64.StdEncoding.EncodeToString([]byte(metadataHex))
 	err = client.PutContent(ctx, owner, repo, ".vaulty/metadata.vty", github.ContentRequest{
 		Message: "Add metadata",
 		Content: metadataContent,

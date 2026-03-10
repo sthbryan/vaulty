@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/DeadBryam/vaulty/internal/crypto"
 )
 
 const GitHubAPIURL = "https://api.github.com"
@@ -284,7 +286,11 @@ func (c *Client) GetMetadata(ctx context.Context, owner, repo string) ([]byte, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %w", err)
 	}
-	return c.DecodeContent(content)
+	encodedData, err := c.DecodeContent(content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode metadata: %w", err)
+	}
+	return crypto.DecompressHex(string(encodedData))
 }
 
 func (c *Client) PutMetadata(ctx context.Context, owner, repo string, metadata []byte) error {
@@ -294,9 +300,14 @@ func (c *Client) PutMetadata(ctx context.Context, owner, repo string, metadata [
 		return fmt.Errorf("failed to get current sha: %w", err)
 	}
 
+	metadataHex, err := crypto.CompressHex(metadata)
+	if err != nil {
+		return fmt.Errorf("failed to compress metadata: %w", err)
+	}
+
 	req := ContentRequest{
 		Message: "Update metadata.vty via Vaulty",
-		Content: c.EncodeContent(metadata),
+		Content: c.EncodeContent([]byte(metadataHex)),
 		Sha:     sha,
 	}
 
