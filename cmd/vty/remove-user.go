@@ -152,7 +152,7 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 
 	ui.PrintInfo("Downloading vault...")
 
-	vaultResp, err := client.GetContent(ctx, owner, repoName, "vault.enc")
+	vaultResp, err := client.GetVault(ctx, owner, repoName)
 	if err != nil {
 		return fmt.Errorf("failed to get vault: %w", err)
 	}
