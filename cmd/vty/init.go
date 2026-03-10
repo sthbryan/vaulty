@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -51,21 +53,42 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println(ui.MutedStyle.Render("  Secure secret management powered by GitHub"))
 	fmt.Println()
 
-	var repoInput string
-	err := huh.NewInput().
-		Title("Repository").
-		Placeholder("owner/repo").
-		Value(&repoInput).
-		Validate(func(s string) error {
-			if s == "" {
-				return fmt.Errorf("repository is required")
-			}
-			_, _, err := github.ParseRepo(s)
-			return err
-		}).
-		Run()
+	cfg, err := config.Load("")
 	if err != nil {
-		return fmt.Errorf("form cancelled")
+		cfg = &config.Config{}
+	}
+
+	var repoInput string
+
+	if cfg.Repo != "" {
+		fmt.Println(ui.InfoStyle.Render(fmt.Sprintf("Existing vault found: %s", cfg.Repo)))
+
+		useExisting, err := ui.AskConfirm("Use this repository?", true)
+		if err != nil {
+			return fmt.Errorf("confirmation failed: %w", err)
+		}
+
+		if useExisting {
+			repoInput = cfg.Repo
+		}
+	}
+
+	if repoInput == "" {
+		err := huh.NewInput().
+			Title("Repository").
+			Placeholder("owner/repo").
+			Value(&repoInput).
+			Validate(func(s string) error {
+				if s == "" {
+					return fmt.Errorf("repository is required")
+				}
+				_, _, err := github.ParseRepo(s)
+				return err
+			}).
+			Run()
+		if err != nil {
+			return fmt.Errorf("form cancelled")
+		}
 	}
 
 	owner, repo, _ := github.ParseRepo(repoInput)
@@ -86,7 +109,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	canaryResp, err := client.GetContent(ctx, owner, repo, ".vaulty/canary.vty")
 	isNewRepo := err != nil
 
-	cfg := &config.Config{}
 	cfg.SetRepo(repoFull)
 
 	passStorage, err := password.NewStorage()
@@ -170,6 +192,11 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 	}
 	cfg.DeviceSalt = deviceSalt
 
+	masterKey, err := crypto.GenerateMasterKey()
+	if err != nil {
+		return fmt.Errorf("generating master key: %w", err)
+	}
+
 	canary, err := crypto.GenerateCanary(password1, deviceSalt)
 	if err != nil {
 		return fmt.Errorf("generating canary: %w", err)
@@ -184,28 +211,103 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		return fmt.Errorf("uploading canary: %w", err)
 	}
 
+	encryptedSalt, err := crypto.EncryptDeviceSalt(deviceSalt, password1)
+	if err != nil {
+		return fmt.Errorf("encrypting device salt: %w", err)
+	}
+
+	saltContent := base64.StdEncoding.EncodeToString(encryptedSalt)
+	err = client.PutContent(ctx, owner, repo, ".vaulty/salt.vty", github.ContentRequest{
+		Message: "Add device salt",
+		Content: saltContent,
+	})
+	if err != nil {
+		return fmt.Errorf("uploading device salt: %w", err)
+	}
+
+	encryptedMasterKey, err := crypto.EncryptMasterKeyWithPassword(masterKey, password1)
+	if err != nil {
+		return fmt.Errorf("encrypting master key: %w", err)
+	}
+
+	masterKeyBytes := make([]byte, 0)
+	masterKeyBytes = append(masterKeyBytes, encryptedMasterKey.Salt...)
+	masterKeyBytes = append(masterKeyBytes, encryptedMasterKey.IV...)
+	masterKeyBytes = append(masterKeyBytes, encryptedMasterKey.Ciphertext...)
+
+	masterKeyContent := base64.StdEncoding.EncodeToString(masterKeyBytes)
+	err = client.PutContent(ctx, owner, repo, ".vaulty/keys/ana.enc", github.ContentRequest{
+		Message: "Add encrypted master key",
+		Content: masterKeyContent,
+	})
+	if err != nil {
+		return fmt.Errorf("uploading master key: %w", err)
+	}
+
+	emptyVault, err := crypto.EncryptVaultData([]byte{}, masterKey)
+	if err != nil {
+		return fmt.Errorf("creating vault: %w", err)
+	}
+
+	vaultBytes := make([]byte, 0)
+	vaultBytes = append(vaultBytes, emptyVault.IV...)
+	vaultBytes = append(vaultBytes, emptyVault.Ciphertext...)
+
+	vaultContent := base64.StdEncoding.EncodeToString(vaultBytes)
+	err = client.PutContent(ctx, owner, repo, ".vaulty/vault.enc", github.ContentRequest{
+		Message: "Create empty vault",
+		Content: vaultContent,
+	})
+	if err != nil {
+		return fmt.Errorf("uploading vault: %w", err)
+	}
+
+	metadata := &config.Metadata{
+		Repo:    fmt.Sprintf("%s/%s", owner, repo),
+		Owner:   "ana",
+		Version: "2.0",
+		Users: []config.UserEntry{
+			{
+				Username:  "ana",
+				Role:      "owner",
+				CreatedAt: time.Now(),
+			},
+		},
+	}
+
+	metadataJSON, err := json.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("marshaling metadata: %w", err)
+	}
+
+	metadataContent := base64.StdEncoding.EncodeToString(metadataJSON)
+	err = client.PutContent(ctx, owner, repo, ".vaulty/metadata.json", github.ContentRequest{
+		Message: "Add metadata",
+		Content: metadataContent,
+	})
+	if err != nil {
+		return fmt.Errorf("uploading metadata: %w", err)
+	}
+
 	seedPhrase, err := crypto.GenerateRecoverySeed()
 	if err != nil {
 		return fmt.Errorf("generating recovery seed: %w", err)
 	}
 
-	recoveryData, err := crypto.EncryptPasswordWithSeed(password1, seedPhrase)
-	if err != nil {
-		return fmt.Errorf("creating recovery data: %w", err)
-	}
-
-	recoveryContent := base64.StdEncoding.EncodeToString(recoveryData)
-	err = client.PutContent(ctx, owner, repo, ".vaulty/recovery.vty", github.ContentRequest{
-		Message: "Add recovery data",
+	recoveryContent := base64.StdEncoding.EncodeToString([]byte(seedPhrase))
+	err = client.PutContent(ctx, owner, repo, ".vaulty/recovery/ana.recovery", github.ContentRequest{
+		Message: "Add recovery seed",
 		Content: recoveryContent,
 	})
 	if err != nil {
-		return fmt.Errorf("uploading recovery data: %w", err)
+		return fmt.Errorf("uploading recovery seed: %w", err)
 	}
 
 	if err := passStorage.Set(password1); err != nil {
 		return fmt.Errorf("storing password: %w", err)
 	}
+
+	cfg.SetCurrentUser("ana", "owner")
 
 	fmt.Println()
 	fmt.Println(ui.SuccessStyle.Render("✅ Repository initialized successfully!"))
@@ -218,8 +320,41 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		Bold(true).
 		Render(seedPhrase))
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Write this down and store it securely. You will need it to recover"))
-	fmt.Println(ui.MutedStyle.Render("your vault if you forget your master password."))
+
+	saveToFile, err := ui.AskConfirm("Save seed phrase to a file?", true)
+	if err != nil {
+		return fmt.Errorf("confirmation failed: %w", err)
+	}
+
+	if saveToFile {
+		var filePath string
+		err = huh.NewInput().
+			Title("File path").
+			Placeholder("vaulty-recovery-seed.txt").
+			Value(&filePath).
+			Run()
+		if err != nil {
+			return fmt.Errorf("form cancelled")
+		}
+
+		if filePath == "" {
+			filePath = "vaulty-recovery-seed.txt"
+		}
+
+		err = os.WriteFile(filePath, []byte(seedPhrase), 0600)
+		if err != nil {
+			return fmt.Errorf("saving seed file: %w", err)
+		}
+
+		fmt.Println()
+		fmt.Println(ui.SuccessStyle.Render(fmt.Sprintf("✅ Seed phrase saved to: %s", filePath)))
+		fmt.Println(ui.MutedStyle.Render("Store this file in a secure location (e.g., password manager)."))
+	} else {
+		fmt.Println()
+		fmt.Println(ui.MutedStyle.Render("Write this down and store it securely. You will need it to recover"))
+		fmt.Println(ui.MutedStyle.Render("your vault if you forget your master password."))
+	}
+
 	fmt.Println()
 
 	return nil
@@ -245,20 +380,40 @@ func linkExistingRepo(ctx context.Context, client *github.Client, owner, repo st
 		return fmt.Errorf("form cancelled")
 	}
 
-	deviceSalt := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, deviceSalt); err != nil {
-		return fmt.Errorf("generating device salt: %w", err)
+	saltResp, err := client.GetContent(ctx, owner, repo, ".vaulty/salt.vty")
+	if err != nil {
+		return fmt.Errorf("device salt not found in vault - this vault may be from an older version. Please recreate the vault with 'vty unlink' and 'vty init'")
 	}
-	cfg.DeviceSalt = deviceSalt
 
-	if err := crypto.ValidateCanary(canaryData, password, deviceSalt); err != nil {
+	saltData, err := client.DecodeContent(saltResp)
+	if err != nil {
+		return fmt.Errorf("decoding device salt: %w", err)
+	}
+
+	deviceSalt, err := crypto.DecryptDeviceSalt(saltData, password)
+	if err != nil {
 		fmt.Println()
-		fmt.Println(ui.ErrorStyle.Render("❌ Wrong password"))
+		fmt.Println(ui.ErrorStyle.Render("❌ Failed to decrypt vault data"))
+		fmt.Println()
+		fmt.Println(ui.MutedStyle.Render("This could mean:"))
+		fmt.Println(ui.MutedStyle.Render("  • Wrong password"))
+		fmt.Println(ui.MutedStyle.Render("  • Corrupted vault data"))
 		fmt.Println()
 		fmt.Println(ui.InfoStyle.Render("If you forgot your password:"))
 		fmt.Println(ui.MutedStyle.Render("  vty recover --seed \"your 12-word seed phrase\""))
 		fmt.Println()
-		return fmt.Errorf("invalid password")
+		return fmt.Errorf("decryption failed")
+	}
+
+	cfg.DeviceSalt = deviceSalt
+
+	if err := crypto.ValidateCanary(canaryData, password, deviceSalt); err != nil {
+		fmt.Println()
+		fmt.Println(ui.ErrorStyle.Render("❌ Invalid vault data"))
+		fmt.Println()
+		fmt.Println(ui.MutedStyle.Render("The vault data may be corrupted."))
+		fmt.Println()
+		return fmt.Errorf("canary validation failed")
 	}
 
 	if err := passStorage.Set(password); err != nil {
