@@ -114,6 +114,12 @@ func renderDetailedVaultInfo(cfg *config.Config, secrets []models.SecretInfo, la
 	fmt.Println(ui.MutedStyle.Render("User: " + cfg.CurrentUser + " (" + cfg.CurrentUserRole + ")"))
 	fmt.Println()
 
+	if cfg.CurrentUserRole == "owner" && cfg.Metadata != nil && len(cfg.Metadata.Users) > 0 {
+		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== USERS ==="))
+		renderUsersTable(cfg.Metadata.Users)
+		fmt.Println()
+	}
+
 	var envSecrets, sshSecrets []models.SecretInfo
 	for _, s := range secrets {
 		if s.Type == models.SecretTypeSSH {
@@ -145,6 +151,32 @@ func renderDetailedVaultInfo(cfg *config.Config, secrets []models.SecretInfo, la
 	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Total Size: %s", formatSize(totalSize))))
 	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Last Sync: %s", formatTime(lastSync))))
 	fmt.Println()
+}
+
+func renderUsersTable(users []config.UserEntry) {
+	t := table.New().
+		Border(lipgloss.NormalBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == 0 {
+				return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary))
+			}
+			if row%2 == 0 {
+				return lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+			}
+			return lipgloss.NewStyle()
+		}).
+		Headers("USERNAME", "ROLE", "CREATED")
+
+	for _, user := range users {
+		t.Row(
+			user.Username,
+			user.Role,
+			formatTime(user.CreatedAt),
+		)
+	}
+
+	fmt.Println(t.Render())
 }
 
 func renderSecretsTable(secrets []models.SecretInfo) {
