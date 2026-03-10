@@ -101,6 +101,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Check if vault already exists on GitHub
+	_, err = client.ListDirectory(ctx, owner, repo, "")
+	if err == nil {
+		return fmt.Errorf("vault already exists at %s - use 'vty link' to connect to an existing vault", repoFull)
+	}
+
 	fmt.Println()
 	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Initializing vault in %s...", repoFull)))
 
@@ -259,7 +265,7 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 	}
 
 	metadataContent := base64.StdEncoding.EncodeToString(metadataJSON)
-	err = client.PutContent(ctx, owner, repo, ".vaulty/metadata.json", github.ContentRequest{
+	err = client.PutContent(ctx, owner, repo, ".vaulty/metadata.vty", github.ContentRequest{
 		Message: "Add metadata",
 		Content: metadataContent,
 	})
