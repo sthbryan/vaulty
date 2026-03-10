@@ -63,7 +63,7 @@ func authenticateUser(cfg *config.Config, password string) (*session.Session, er
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	metadataResp, err := client.GetContent(ctx, owner, repo, ".vaulty/metadata.vty")
+	metadataResp, err := client.GetContent(ctx, owner, repo, ".vaulty/metadata.json")
 	if err != nil {
 		return nil, fmt.Errorf("downloading metadata: %w", err)
 	}
@@ -107,8 +107,13 @@ func authenticateUser(cfg *config.Config, password string) (*session.Session, er
 		return nil, fmt.Errorf("decoding key data: %w", err)
 	}
 
+	keyJSON, err := crypto.DecompressHex(string(keyData))
+	if err != nil {
+		return nil, fmt.Errorf("decompressing master key: %w", err)
+	}
+
 	encryptedKey := &crypto.EncryptedData{}
-	if err := json.Unmarshal(keyData, encryptedKey); err != nil {
+	if err := json.Unmarshal(keyJSON, encryptedKey); err != nil {
 		return nil, fmt.Errorf("parsing master key JSON: %w", err)
 	}
 
@@ -127,8 +132,13 @@ func authenticateUser(cfg *config.Config, password string) (*session.Session, er
 		return nil, fmt.Errorf("decoding vault data: %w", err)
 	}
 
+	vaultJSON, err := crypto.DecompressHex(string(vaultEncData))
+	if err != nil {
+		return nil, fmt.Errorf("decompressing vault: %w", err)
+	}
+
 	encryptedVault := &crypto.EncryptedData{}
-	if err := json.Unmarshal(vaultEncData, encryptedVault); err != nil {
+	if err := json.Unmarshal(vaultJSON, encryptedVault); err != nil {
 		return nil, fmt.Errorf("parsing vault JSON: %w", err)
 	}
 

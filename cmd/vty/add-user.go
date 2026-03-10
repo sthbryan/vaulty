@@ -126,9 +126,9 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Downloading .vaulty/keys/%s.enc...", cfg.CurrentUser)))
+	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Downloading .vaulty/keys/%s.vty...", cfg.CurrentUser)))
 
-	keyPath := fmt.Sprintf(".vaulty/keys/%s.enc", cfg.CurrentUser)
+	keyPath := fmt.Sprintf(".vaulty/keys/%s.vty", cfg.CurrentUser)
 	keyResp, err := client.GetContent(ctx, owner, repo, keyPath)
 	if err != nil {
 		return fmt.Errorf("failed to download owner key: %w", err)
@@ -139,8 +139,13 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decoding owner key: %w", err)
 	}
 
+	keyJSON, err := crypto.DecompressHex(string(keyData))
+	if err != nil {
+		return fmt.Errorf("decompressing owner key: %w", err)
+	}
+
 	encryptedData := &crypto.EncryptedData{}
-	if err := json.Unmarshal(keyData, encryptedData); err != nil {
+	if err := json.Unmarshal(keyJSON, encryptedData); err != nil {
 		return fmt.Errorf("parsing owner key JSON: %w", err)
 	}
 
@@ -224,9 +229,9 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("marshaling master key: %w", err)
 	}
 
-	encryptedMasterKeyHex, err := crypto.EncryptBinary(masterKeyJSON, masterKey)
+	masterKeyHex, err := crypto.CompressHex(masterKeyJSON)
 	if err != nil {
-		return fmt.Errorf("encrypting master key binary: %w", err)
+		return fmt.Errorf("compressing master key: %w", err)
 	}
 
 	recoverySeeds, err := crypto.GenerateRecoverySeed()
@@ -249,7 +254,7 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println(ui.MutedStyle.Render("Uploading files to GitHub..."))
 
-	err = client.PutUserKeys(ctx, owner, repo, username, []byte(encryptedMasterKeyHex))
+	err = client.PutUserKeys(ctx, owner, repo, username, []byte(masterKeyHex))
 	if err != nil {
 		return fmt.Errorf("uploading key: %w", err)
 	}
@@ -264,12 +269,12 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("marshaling encrypted seed: %w", err)
 	}
 
-	encryptedRecoveryHex, err := crypto.EncryptBinary(encryptedSeedJSON, masterKey)
+	recoveryHex, err := crypto.CompressHex(encryptedSeedJSON)
 	if err != nil {
-		return fmt.Errorf("encrypting recovery binary: %w", err)
+		return fmt.Errorf("compressing recovery: %w", err)
 	}
 
-	err = client.PutRecoverySeed(ctx, owner, repo, username, []byte(encryptedRecoveryHex))
+	err = client.PutRecoverySeed(ctx, owner, repo, username, []byte(recoveryHex))
 	if err != nil {
 		return fmt.Errorf("uploading recovery seed: %w", err)
 	}

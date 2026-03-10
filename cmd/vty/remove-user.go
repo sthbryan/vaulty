@@ -163,8 +163,13 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to decode vault: %w", err)
 	}
 
+	vaultJSON, err := crypto.DecompressHex(string(vaultData))
+	if err != nil {
+		return fmt.Errorf("decompressing vault: %w", err)
+	}
+
 	vaultEncryptedData := &crypto.EncryptedData{}
-	if err := json.Unmarshal(vaultData, vaultEncryptedData); err != nil {
+	if err := json.Unmarshal(vaultJSON, vaultEncryptedData); err != nil {
 		return fmt.Errorf("failed to parse vault: %w", err)
 	}
 
@@ -223,9 +228,9 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to marshal encrypted key: %w", err)
 	}
 
-	ownerKeyHex, err := crypto.EncryptBinary(ownerKeyJSON, newMasterKey)
+	ownerKeyHex, err := crypto.CompressHex(ownerKeyJSON)
 	if err != nil {
-		return fmt.Errorf("failed to binary encrypt owner key: %w", err)
+		return fmt.Errorf("failed to compress owner key: %w", err)
 	}
 
 	fmt.Println()
@@ -236,7 +241,12 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to marshal vault: %w", err)
 	}
 
-	err = client.PutVault(ctx, owner, repoName, newVaultJSON)
+	newVaultHex, err := crypto.CompressHex(newVaultJSON)
+	if err != nil {
+		return fmt.Errorf("failed to compress vault: %w", err)
+	}
+
+	err = client.PutVault(ctx, owner, repoName, []byte(newVaultHex))
 	if err != nil {
 		return fmt.Errorf("failed to upload vault: %w", err)
 	}
