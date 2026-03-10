@@ -12,7 +12,7 @@ import (
 	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/github"
-	"github.com/DeadBryam/vaulty/internal/password"
+	"github.com/DeadBryam/vaulty/internal/session"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/charmbracelet/huh"
@@ -67,7 +67,22 @@ Examples:
 
 func runPullEnv(cmd *cobra.Command, args []string) error {
 	name := args[0]
-	return pullSecret(name, "env", "")
+
+	cfg, err := config.Load("")
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("invalid config: %w", err)
+	}
+
+	sess, err := ensureAuthenticated(cfg)
+	if err != nil {
+		return err
+	}
+
+	return pullSecretWithSession(name, "env", "", sess)
 }
 
 func runPullSSH(cmd *cobra.Command, args []string) error {
@@ -82,22 +97,23 @@ func runPullSSH(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid config: %w", err)
 	}
 
-	if cfg.CurrentUser == "" {
-		return fmt.Errorf("no user configured. Run 'vty login' first")
+	sess, err := ensureAuthenticated(cfg)
+	if err != nil {
+		return err
 	}
 
-	targetUser := cfg.CurrentUser
+	targetUser := sess.Username
 	if pullUser != "" {
-		if !cfg.IsOwner() {
+		if sess.Role != "owner" {
 			return fmt.Errorf("only owner can pull other users' SSH keys")
 		}
 		targetUser = pullUser
 	}
 
-	return pullSecret(name, "ssh", targetUser)
+	return pullSecretWithSession(name, "ssh", targetUser, sess)
 }
 
-func pullSecret(name, secretType, targetUser string) error {
+func pullSecretWithSession(name, secretType, targetUser string, sess *session.Session) error {
 	cfg, err := config.Load("")
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
@@ -105,10 +121,6 @@ func pullSecret(name, secretType, targetUser string) error {
 
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid config: %w", err)
-	}
-
-	if cfg.CurrentUser == "" {
-		return fmt.Errorf("no user configured. Run 'vty login' first")
 	}
 
 	owner, repo, err := github.ParseRepo(cfg.Repo)
@@ -134,16 +146,6 @@ func pullSecret(name, secretType, targetUser string) error {
 		logger.Info("☁️  Downloading SSH key...", "name", name, "user", targetUser)
 	}
 
-	storage, err := password.NewStorage()
-	if err != nil {
-		return fmt.Errorf("initializing password storage: %w", err)
-	}
-
-	passwordStr, err := storage.Get()
-	if err != nil {
-		return fmt.Errorf("password not found. Run 'vty init' or 'vty recover'")
-	}
-
 	content, err := client.GetContent(ctx, owner, repo, path)
 	if err != nil {
 		return fmt.Errorf("secret not found: %s", path)
@@ -162,7 +164,7 @@ func pullSecret(name, secretType, targetUser string) error {
 	}
 
 	logger.Info("🔓 Decrypting...")
-	compressedData, err := crypto.Decrypt(&vaultFile.Data, passwordStr)
+	compressedData, err := crypto.Decrypt(&vaultFile.Data, string(sess.MasterKey))
 	if err != nil {
 		if err == crypto.ErrDecryptionFailed {
 			return fmt.Errorf("decryption failed: invalid password")

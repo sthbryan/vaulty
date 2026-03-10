@@ -14,7 +14,7 @@ import (
 	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/github"
-	"github.com/DeadBryam/vaulty/internal/password"
+	"github.com/DeadBryam/vaulty/internal/session"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/spf13/cobra"
@@ -67,8 +67,7 @@ Examples:
 	RunE: runPushSSH,
 }
 
-func checkPushPermissions(cfg *config.Config) error {
-	role := cfg.GetRole()
+func checkPushPermissions(role string) error {
 	if role == "" {
 		return fmt.Errorf("no active session. Run 'vty login' first")
 	}
@@ -120,19 +119,7 @@ func loadConfigAndClient() (*config.Config, *github.Client, error) {
 	return cfg, client, nil
 }
 
-func getPassword() (string, error) {
-	storage, err := password.NewStorage()
-	if err != nil {
-		return "", fmt.Errorf("failed to create password storage: %w", err)
-	}
-	pwd, err := storage.Get()
-	if err != nil {
-		return "", fmt.Errorf("password not found. Run 'vty init' or 'vty recover'")
-	}
-	return pwd, nil
-}
-
-func encryptAndPrepareFile(path, name string, secretType models.SecretType, pwd string) (*models.VaultFile, int64, error) {
+func encryptAndPrepareFileWithSession(path, name string, secretType models.SecretType, sess *session.Session) (*models.VaultFile, int64, error) {
 	ui.PrintInfo("Reading file: %s", path)
 
 	content, err := os.ReadFile(path)
@@ -158,7 +145,7 @@ func encryptAndPrepareFile(path, name string, secretType models.SecretType, pwd 
 		float64(originalSize-compressedSize)/float64(originalSize)*100)
 
 	ui.PrintLock("Encrypting...")
-	encrypted, err := crypto.Encrypt(compressed, pwd)
+	encrypted, err := crypto.Encrypt(compressed, string(sess.MasterKey))
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to encrypt: %w", err)
 	}
@@ -239,7 +226,12 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := checkPushPermissions(cfg); err != nil {
+	sess, err := ensureAuthenticated(cfg)
+	if err != nil {
+		return err
+	}
+
+	if err := checkPushPermissions(sess.Role); err != nil {
 		return err
 	}
 
@@ -247,12 +239,7 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	pwd, err := getPassword()
-	if err != nil {
-		return err
-	}
-
-	vaultFile, originalSize, err := encryptAndPrepareFile(path, name, models.SecretTypeEnv, pwd)
+	vaultFile, originalSize, err := encryptAndPrepareFileWithSession(path, name, models.SecretTypeEnv, sess)
 	if err != nil {
 		return err
 	}
@@ -292,24 +279,20 @@ func runPushSSH(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := checkPushPermissions(cfg); err != nil {
+	sess, err := ensureAuthenticated(cfg)
+	if err != nil {
 		return err
 	}
 
-	if cfg.CurrentUser == "" {
-		return fmt.Errorf("no active user session. Run 'vty login' first")
+	if err := checkPushPermissions(sess.Role); err != nil {
+		return err
 	}
 
 	if err := validateFile(path); err != nil {
 		return err
 	}
 
-	pwd, err := getPassword()
-	if err != nil {
-		return err
-	}
-
-	vaultFile, originalSize, err := encryptAndPrepareFile(path, name, models.SecretTypeSSH, pwd)
+	vaultFile, originalSize, err := encryptAndPrepareFileWithSession(path, name, models.SecretTypeSSH, sess)
 	if err != nil {
 		return err
 	}
@@ -319,7 +302,7 @@ func runPushSSH(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to marshal vault file: %w", err)
 	}
 
-	remotePath := fmt.Sprintf("ssh/%s/%s.vty", cfg.CurrentUser, name)
+	remotePath := fmt.Sprintf("ssh/%s/%s.vty", sess.Username, name)
 
 	ctx := context.Background()
 	owner, repoName, err := github.ParseRepo(cfg.Repo)
@@ -327,8 +310,8 @@ func runPushSSH(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid repo format: %w", err)
 	}
 
-	ui.PrintCloud("Ensuring SSH directory exists for user: %s", cfg.CurrentUser)
-	if err := ensureSSHUserDir(ctx, client, owner, repoName, cfg.CurrentUser); err != nil {
+	ui.PrintCloud("Ensuring SSH directory exists for user: %s", sess.Username)
+	if err := ensureSSHUserDir(ctx, client, owner, repoName, sess.Username); err != nil {
 		return fmt.Errorf("failed to ensure SSH user directory: %w", err)
 	}
 
@@ -339,7 +322,7 @@ func runPushSSH(cmd *cobra.Command, args []string) error {
 	ui.PrintSuccess("Pushed SSH key successfully!")
 	fmt.Println()
 	fmt.Printf("  Name:    %s\n", name)
-	fmt.Printf("  User:    %s\n", cfg.CurrentUser)
+	fmt.Printf("  User:    %s\n", sess.Username)
 	fmt.Printf("  Path:    %s\n", remotePath)
 	fmt.Printf("  Size:    %s → %s\n",
 		ui.FormatBytes(originalSize),

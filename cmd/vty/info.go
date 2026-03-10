@@ -9,6 +9,7 @@ import (
 
 	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/session"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/charmbracelet/lipgloss"
@@ -32,12 +33,9 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	if cfg.Repo == "" {
-		return fmt.Errorf("Vaulty not initialized. Run 'vty init' first")
-	}
-
-	if cfg.CurrentUser == "" {
-		return fmt.Errorf("no user configured. Run 'vty login' first")
+	sess, err := ensureAuthenticated(cfg)
+	if err != nil {
+		return err
 	}
 
 	owner, repo, err := github.ParseRepo(cfg.Repo)
@@ -76,10 +74,10 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if cfg.CurrentUserRole == "owner" {
+	if sess.Role == "owner" {
 		sshKeys, err = client.ListAllSSHKeys(ctx, owner, repo)
 	} else {
-		sshKeys, err = client.ListSSHKeys(ctx, owner, repo, cfg.CurrentUser)
+		sshKeys, err = client.ListSSHKeys(ctx, owner, repo, sess.Username)
 	}
 	if err == nil {
 		for _, key := range sshKeys {
@@ -106,17 +104,17 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		return secrets[i].Type < secrets[j].Type
 	})
 
-	renderDetailedVaultInfo(cfg, secrets, sshKeys, cfg.UpdatedAt)
+	renderDetailedVaultInfo(cfg, sess, secrets, sshKeys, cfg.UpdatedAt)
 	return nil
 }
 
-func renderDetailedVaultInfo(cfg *config.Config, secrets []models.SecretInfo, sshKeys []github.SSHKeyInfo, lastSync time.Time) {
+func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets []models.SecretInfo, sshKeys []github.SSHKeyInfo, lastSync time.Time) {
 	fmt.Println()
 
-	fmt.Println(ui.MutedStyle.Render("User: " + cfg.CurrentUser + " (" + cfg.CurrentUserRole + ")"))
+	fmt.Println(ui.MutedStyle.Render("User: " + sess.Username + " (" + sess.Role + ")"))
 	fmt.Println()
 
-	if cfg.CurrentUserRole == "owner" && cfg.Metadata != nil && len(cfg.Metadata.Users) > 0 {
+	if sess.Role == "owner" && cfg.Metadata != nil && len(cfg.Metadata.Users) > 0 {
 		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== USERS ==="))
 		renderUsersTable(cfg.Metadata.Users)
 		fmt.Println()
@@ -139,7 +137,7 @@ func renderDetailedVaultInfo(cfg *config.Config, secrets []models.SecretInfo, ss
 
 	if len(sshKeys) > 0 {
 		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== SSH KEYS ==="))
-		renderSSHKeysTable(sshKeys, cfg.CurrentUserRole)
+		renderSSHKeysTable(sshKeys, sess.Role)
 		fmt.Println()
 	}
 
@@ -164,7 +162,7 @@ func renderDetailedVaultInfo(cfg *config.Config, secrets []models.SecretInfo, ss
 	fmt.Printf("%s ssh)\n", ui.HighlightStyle.Render(formatSize(calculateTypeSize(secrets, models.SecretTypeSSH))))
 	fmt.Println()
 
-	if cfg.CurrentUserRole == "owner" {
+	if sess.Role == "owner" {
 		fmt.Println("  SSH Breakdown:")
 		userKeyCounts := make(map[string]int)
 		userKeySizes := make(map[string]int64)
@@ -184,7 +182,7 @@ func renderDetailedVaultInfo(cfg *config.Config, secrets []models.SecretInfo, ss
 		fmt.Println()
 	}
 
-	if cfg.CurrentUserRole == "owner" && cfg.Metadata != nil {
+	if sess.Role == "owner" && cfg.Metadata != nil {
 		ownerCount := 0
 		editorCount := 0
 		viewerCount := 0
