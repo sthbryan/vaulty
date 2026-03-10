@@ -149,6 +149,29 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		}
 	}
 
+	fmt.Println(ui.InfoStyle.Render("👤 Set your username"))
+	fmt.Println()
+
+	var username string
+	err = huh.NewInput().
+		Title("Username").
+		Placeholder("your-username").
+		Value(&username).
+		Validate(func(s string) error {
+			if s == "" {
+				return fmt.Errorf("username is required")
+			}
+			if len(s) < 3 {
+				return fmt.Errorf("username must be at least 3 characters")
+			}
+			return nil
+		}).
+		Run()
+	if err != nil {
+		return fmt.Errorf("form cancelled")
+	}
+
+	fmt.Println()
 	fmt.Println(ui.InfoStyle.Render("🔐 Create your master password"))
 	fmt.Println()
 
@@ -264,11 +287,11 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 
 	metadata := &config.Metadata{
 		Repo:    fmt.Sprintf("%s/%s", owner, repo),
-		Owner:   "ana",
+		Owner:   username,
 		Version: "2.0",
 		Users: []config.UserEntry{
 			{
-				Username:  "ana",
+				Username:  username,
 				Role:      "owner",
 				CreatedAt: time.Now(),
 			},
@@ -307,7 +330,7 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		return fmt.Errorf("storing password: %w", err)
 	}
 
-	cfg.SetCurrentUser("ana", "owner")
+	cfg.SetCurrentUser(username, "owner")
 
 	fmt.Println()
 	fmt.Println(ui.SuccessStyle.Render("✅ Repository initialized successfully!"))
