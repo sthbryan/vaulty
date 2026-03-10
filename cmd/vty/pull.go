@@ -23,28 +23,81 @@ import (
 var (
 	pullOutput      string
 	pullInteractive bool
+	pullUser        string
 )
 
 var pullCmd = &cobra.Command{
-	Use:   "pull <name>",
+	Use:   "pull",
 	Short: "Pull and decrypt secrets from GitHub",
 	Long: `Pull encrypted secrets from your GitHub repository.
 
-This command will:
-  • Download the encrypted file from GitHub (tries envs/ then ssh/)
-  • Decrypt and decompress the data 🔓🗜️
-  • Save to your chosen filename with secure permissions (0600) 🔐
+This command downloads, decrypts and saves secrets from your Vaulty repository.
 
 Examples:
-  vty pull myapp-prod
-  vty pull myapp-prod -o .env.production`,
-	Args: cobra.ExactArgs(1),
-	RunE: runPull,
+  vty pull env myapp-prod          # Pull environment secrets
+  vty pull ssh my-key              # Pull your own SSH key
+  vty pull ssh my-key -u other     # Owner: pull another user's SSH key`,
 }
 
-func runPull(cmd *cobra.Command, args []string) error {
+var pullEnvCmd = &cobra.Command{
+	Use:   "env <name>",
+	Short: "Pull environment secrets from GitHub",
+	Long: `Download and decrypt environment secrets from the envs/ directory.
+
+Examples:
+  vty pull env myapp-prod
+  vty pull env myapp-prod -o .env.production`,
+	Args: cobra.ExactArgs(1),
+	RunE: runPullEnv,
+}
+
+var pullSSHCmd = &cobra.Command{
+	Use:   "ssh <name>",
+	Short: "Pull SSH key from GitHub",
+	Long: `Download and decrypt SSH key from the ssh/ directory.
+
+Users can only pull their own SSH keys unless they are the owner.
+
+Examples:
+  vty pull ssh my-key              # Pull current user's SSH key
+  vty pull ssh team-key -u other   # Owner: pull another user's key`,
+	Args: cobra.ExactArgs(1),
+	RunE: runPullSSH,
+}
+
+func runPullEnv(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	return pullSecret(name, "env", "")
+}
+
+func runPullSSH(cmd *cobra.Command, args []string) error {
 	name := args[0]
 
+	cfg, err := config.Load("")
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("invalid config: %w", err)
+	}
+
+	if cfg.CurrentUser == "" {
+		return fmt.Errorf("no user configured. Run 'vty login' first")
+	}
+
+	targetUser := cfg.CurrentUser
+	if pullUser != "" {
+		if !cfg.IsOwner() {
+			return fmt.Errorf("only owner can pull other users' SSH keys")
+		}
+		targetUser = pullUser
+	}
+
+	return pullSecret(name, "ssh", targetUser)
+}
+
+func pullSecret(name, secretType, targetUser string) error {
 	cfg, err := config.Load("")
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
@@ -72,7 +125,14 @@ func runPull(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	logger.Info("☁️  Downloading from GitHub...", "name", name)
+	var path string
+	if secretType == "env" {
+		path = fmt.Sprintf("envs/%s.vty", name)
+		logger.Info("☁️  Downloading environment secrets...", "name", name)
+	} else {
+		path = fmt.Sprintf("ssh/%s/%s.vty", targetUser, name)
+		logger.Info("☁️  Downloading SSH key...", "name", name, "user", targetUser)
+	}
 
 	storage, err := password.NewStorage()
 	if err != nil {
@@ -81,21 +141,12 @@ func runPull(cmd *cobra.Command, args []string) error {
 
 	passwordStr, err := storage.Get()
 	if err != nil {
-		return fmt.Errorf("Password not found. Run 'vty init' or 'vty recover'")
+		return fmt.Errorf("password not found. Run 'vty init' or 'vty recover'")
 	}
 
-	var content *github.ContentResponse
-	var path string
-
-	path = fmt.Sprintf("envs/%s.vty", name)
-	content, err = client.GetContent(ctx, owner, repo, path)
+	content, err := client.GetContent(ctx, owner, repo, path)
 	if err != nil {
-		logger.Info("Not found in envs/, trying ssh/...")
-		path = fmt.Sprintf("ssh/%s.vty", name)
-		content, err = client.GetContent(ctx, owner, repo, path)
-		if err != nil {
-			return fmt.Errorf("secret not found in envs/ or ssh/: %w", err)
-		}
+		return fmt.Errorf("secret not found: %s", path)
 	}
 
 	logger.Info("✓ Downloaded", "path", path, "size", content.Size)
@@ -125,9 +176,14 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decompressing: %w", err)
 	}
 
-	outputFile, err := getOutputFilename(name)
+	outputFile, err := getOutputFilename(name, secretType)
 	if err != nil {
 		return err
+	}
+
+	if outputFile == "-" {
+		fmt.Print(string(plaintext))
+		return nil
 	}
 
 	if !filepath.IsAbs(outputFile) {
@@ -165,12 +221,15 @@ func runPull(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func getOutputFilename(_ string) (string, error) {
+func getOutputFilename(name, secretType string) (string, error) {
 	if pullOutput != "" {
 		return pullOutput, nil
 	}
 
 	if !pullInteractive {
+		if secretType == "ssh" {
+			return name, nil
+		}
 		return ".env", nil
 	}
 
@@ -178,15 +237,26 @@ func getOutputFilename(_ string) (string, error) {
 	fmt.Println(ui.InfoStyle.Render("💾 Choose output filename:"))
 
 	var selected string
-	err := huh.NewSelect[string]().
-		Title("Select filename").
-		Options(
+	var options []huh.Option[string]
+
+	if secretType == "ssh" {
+		options = []huh.Option[string]{
+			huh.NewOption(fmt.Sprintf("%s (default)", name), name),
+			huh.NewOption("Custom filename...", "custom"),
+		}
+	} else {
+		options = []huh.Option[string]{
 			huh.NewOption(".env (default)", ".env"),
 			huh.NewOption(".env.local", ".env.local"),
 			huh.NewOption(".env.production", ".env.production"),
 			huh.NewOption(".env.development", ".env.development"),
 			huh.NewOption("Custom filename...", "custom"),
-		).
+		}
+	}
+
+	err := huh.NewSelect[string]().
+		Title("Select filename").
+		Options(options...).
 		Value(&selected).
 		Run()
 	if err != nil {
@@ -194,7 +264,11 @@ func getOutputFilename(_ string) (string, error) {
 	}
 
 	if selected == "custom" {
-		customName, err := ui.AskInput("Enter custom filename", "my-secrets.env")
+		defaultName := name
+		if secretType == "env" {
+			defaultName = "my-secrets.env"
+		}
+		customName, err := ui.AskInput("Enter custom filename", defaultName)
 		if err != nil {
 			return "", fmt.Errorf("input cancelled")
 		}
@@ -205,9 +279,15 @@ func getOutputFilename(_ string) (string, error) {
 }
 
 func init() {
-	pullCmd.Flags().StringVarP(&pullOutput, "output", "o", "", "Output filename (default: .env)")
-	pullCmd.Flags().BoolVarP(&pullInteractive, "interactive", "i", false, "Interactive mode (prompt for filename)")
+	pullEnvCmd.Flags().StringVarP(&pullOutput, "output", "o", "", "Output filename (default: .env, use - for stdout)")
+	pullEnvCmd.Flags().BoolVarP(&pullInteractive, "interactive", "i", false, "Interactive mode (prompt for filename)")
 
+	pullSSHCmd.Flags().StringVarP(&pullOutput, "output", "o", "", "Output filename (default: <name>, use - for stdout)")
+	pullSSHCmd.Flags().BoolVarP(&pullInteractive, "interactive", "i", false, "Interactive mode (prompt for filename)")
+	pullSSHCmd.Flags().StringVarP(&pullUser, "user", "u", "", "Target user (owner only)")
+
+	pullCmd.AddCommand(pullEnvCmd)
+	pullCmd.AddCommand(pullSSHCmd)
 	rootCmd.AddCommand(pullCmd)
 }
 
