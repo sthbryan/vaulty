@@ -37,9 +37,10 @@ func (b *Base64Bytes) UnmarshalJSON(data []byte) error {
 }
 
 type UserEntry struct {
-	Username  string    `json:"username"`
-	Role      string    `json:"role"`
-	CreatedAt time.Time `json:"created_at"`
+	Username          string    `json:"username"`
+	Role              string    `json:"role"`
+	CreatedAt         time.Time `json:"created_at"`
+	PasswordChallenge string    `json:"password_challenge,omitempty"`
 }
 
 type Metadata struct {
