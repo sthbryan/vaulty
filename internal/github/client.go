@@ -394,3 +394,66 @@ func toString(v interface{}) string {
 	}
 	return ""
 }
+
+func (c *Client) EnsureSSHUserDir(ctx context.Context, owner, repo, username string) error {
+	path := fmt.Sprintf("ssh/%s/.gitkeep", username)
+	_, err := c.GetContent(ctx, owner, repo, path)
+	if err == nil {
+		return nil
+	}
+	if !strings.Contains(err.Error(), "404") {
+		return fmt.Errorf("failed to check directory: %w", err)
+	}
+
+	req := ContentRequest{
+		Message: fmt.Sprintf("Create SSH directory for %s", username),
+		Content: c.EncodeContent([]byte("")),
+	}
+
+	return c.PutContent(ctx, owner, repo, path, req)
+}
+
+func (c *Client) ListSSHKeys(ctx context.Context, owner, repo, username string) ([]string, error) {
+	path := fmt.Sprintf("ssh/%s", username)
+	items, err := c.ListDirectory(ctx, owner, repo, path)
+	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("failed to list SSH keys: %w", err)
+	}
+
+	var keys []string
+	for _, item := range items {
+		if item.Type == "file" && strings.HasSuffix(item.Name, ".vty") {
+			keys = append(keys, item.Name)
+		}
+	}
+
+	return keys, nil
+}
+
+func (c *Client) ListAllSSHKeys(ctx context.Context, owner, repo string) (map[string][]string, error) {
+	items, err := c.ListDirectory(ctx, owner, repo, "ssh")
+	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return map[string][]string{}, nil
+		}
+		return nil, fmt.Errorf("failed to list SSH directory: %w", err)
+	}
+
+	result := make(map[string][]string)
+	for _, item := range items {
+		if item.Type == "dir" {
+			keys, err := c.ListSSHKeys(ctx, owner, repo, item.Name)
+			if err != nil {
+				continue
+			}
+			if len(keys) > 0 {
+				result[item.Name] = keys
+			}
+		}
+	}
+
+	return result, nil
+}
