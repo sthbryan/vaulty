@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -26,20 +27,32 @@ var recoverCmd = &cobra.Command{
 }
 
 var recoverSeed string
+var recoverFile string
 
 func runRecover(cmd *cobra.Command, args []string) error {
-	if recoverSeed == "" {
-		return fmt.Errorf("--seed flag is required")
+	var seedPhrase string
+
+	if recoverFile != "" {
+		data, err := os.ReadFile(recoverFile)
+		if err != nil {
+			return fmt.Errorf("reading seed file: %w", err)
+		}
+		seedPhrase = strings.TrimSpace(string(data))
+	} else if recoverSeed != "" {
+		seedPhrase = recoverSeed
+	} else {
+		return fmt.Errorf("--seed or --file flag is required")
 	}
 
-	words := strings.Fields(recoverSeed)
+	seedPhrase = strings.TrimSpace(strings.ToLower(seedPhrase))
+	words := strings.Fields(seedPhrase)
 	if len(words) != 12 {
-		return fmt.Errorf("Invalid recovery seed phrase")
+		return fmt.Errorf("invalid recovery seed phrase: expected 12 words, got %d", len(words))
 	}
 
-	_, err := crypto.ValidateRecoverySeed(recoverSeed)
+	_, err := crypto.ValidateRecoverySeed(seedPhrase)
 	if err != nil {
-		return fmt.Errorf("Invalid recovery seed phrase")
+		return fmt.Errorf("invalid recovery seed phrase: %w", err)
 	}
 
 	cfg, err := config.Load("")
@@ -110,7 +123,7 @@ func runRecover(cmd *cobra.Command, args []string) error {
 
 	recoveryResp, err := client.GetContent(ctx, owner, repo, ".vaulty/recovery.vty")
 	if err != nil {
-		return fmt.Errorf("fetching recovery data: %w", err)
+		return fmt.Errorf("recovery data not found in vault - this vault may have been created before recovery support was added. Please recreate the vault with 'vty init'")
 	}
 
 	recoveryData, err := client.DecodeContent(recoveryResp)
@@ -118,9 +131,9 @@ func runRecover(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decoding recovery data: %w", err)
 	}
 
-	originalPassword, err := crypto.DecryptPasswordWithSeed(recoveryData, recoverSeed)
+	originalPassword, err := crypto.DecryptPasswordWithSeed(recoveryData, seedPhrase)
 	if err != nil {
-		return fmt.Errorf("invalid seed phrase")
+		return fmt.Errorf("seed phrase does not match this vault - please verify you have the correct seed phrase")
 	}
 
 	canaryResp, err := client.GetContent(ctx, owner, repo, ".vaulty/canary.vty")
@@ -137,7 +150,39 @@ func runRecover(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid seed phrase")
 	}
 
-	newCanary, err := crypto.GenerateCanary(password1, deviceSalt)
+	saltResp, err := client.GetContent(ctx, owner, repo, ".vaulty/salt.vty")
+	if err != nil {
+		return fmt.Errorf("device salt not found in vault: %w", err)
+	}
+
+	saltData, err := client.DecodeContent(saltResp)
+	if err != nil {
+		return fmt.Errorf("decoding device salt: %w", err)
+	}
+
+	vaultDeviceSalt, err := crypto.DecryptDeviceSalt(saltData, originalPassword)
+	if err != nil {
+		return fmt.Errorf("decrypting device salt: %w", err)
+	}
+
+	cfg.DeviceSalt = vaultDeviceSalt
+
+	newSalt, err := crypto.EncryptDeviceSalt(vaultDeviceSalt, password1)
+	if err != nil {
+		return fmt.Errorf("encrypting device salt with new password: %w", err)
+	}
+
+	saltContent := base64.StdEncoding.EncodeToString(newSalt)
+	err = client.PutContent(ctx, owner, repo, ".vaulty/salt.vty", github.ContentRequest{
+		Message: "Recover vault - update salt encryption",
+		Content: saltContent,
+		Sha:     saltResp.Sha,
+	})
+	if err != nil {
+		return fmt.Errorf("updating device salt: %w", err)
+	}
+
+	newCanary, err := crypto.GenerateCanary(password1, vaultDeviceSalt)
 	if err != nil {
 		return fmt.Errorf("generating new canary: %w", err)
 	}
@@ -169,7 +214,7 @@ func runRecover(cmd *cobra.Command, args []string) error {
 	fmt.Println(ui.SuccessStyle.Render("✅ Recovery successful!"))
 	fmt.Println()
 	fmt.Println(ui.InfoStyle.Render("Your vault has been recovered with a new master password."))
-	fmt.Println(ui.MutedStyle.Render("The device salt has been regenerated for this machine."))
+	fmt.Println(ui.MutedStyle.Render("Your vault is now ready to use on this machine."))
 	fmt.Println()
 
 	return nil
@@ -177,5 +222,6 @@ func runRecover(cmd *cobra.Command, args []string) error {
 
 func init() {
 	recoverCmd.Flags().StringVar(&recoverSeed, "seed", "", "12-word recovery seed phrase")
-	recoverCmd.MarkFlagRequired("seed")
+	recoverCmd.Flags().StringVar(&recoverFile, "file", "", "Path to file containing the recovery seed phrase")
+	rootCmd.AddCommand(recoverCmd)
 }
