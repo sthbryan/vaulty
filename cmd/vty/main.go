@@ -39,11 +39,7 @@ func init() {
 		ReportTimestamp: false,
 		Level:           log.InfoLevel,
 	})
-	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(configCmd)
-	rootCmd.AddCommand(loginCmd)
-	rootCmd.AddCommand(logoutCmd)
-	rootCmd.AddCommand(linkCmd)
 }
 
 func main() {
