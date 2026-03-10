@@ -9,19 +9,12 @@ import (
 )
 
 var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	version = ""
+	commit  = ""
+	date    = ""
 )
 
 var logger *log.Logger
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
 
 var rootCmd = &cobra.Command{
 	Use:   "vty",

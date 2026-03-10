@@ -2,8 +2,10 @@
 
 # Variables
 BINARY_NAME=vty
-VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS=-ldflags "-X main.version=$(VERSION)"
+VERSION=0.0.5
+COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
+BUILT=$(shell date +%Y-%m-%d)
+LDFLAGS=-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(BUILT)"
 CGO_ENABLED=0
 BUILD_DIR=bin
 
