@@ -15,7 +15,9 @@ Vaulty is a secure CLI tool for managing environment variables, SSH keys, and te
 - **Secure Storage** — AES-256-GCM encryption with PBKDF2 key derivation
 - **GitHub Backend** — Store encrypted secrets in your private GitHub repository
 - **Master Password** — Single password for all operations with secure OS keyring storage
-- **Recovery Seed** — 12-word BIP39 seed phrase for password recovery
+- **Recovery Seed** — 12-word BIP39 seed phrase per user for password recovery
+- **Multi-User Support** — Team vaults with Owner, Editor, and Viewer roles
+- **Session Management** — Lock/unlock vault, membership validation on operations
 - **SSH Key Management** — Securely store and sync SSH private keys
 - **Cross-Platform** — Works on macOS, Linux, and Windows
 - **Zero-Config** — Works out of the box with GitHub CLI authentication
@@ -99,22 +101,50 @@ vty init
 ```
 
 This will:
-- Prompt for a GitHub repository (owner/repo format)
+- Prompt for your username and master password
 - Create or link to an existing private repository
-- Set up your master password
+- Generate a masterKey (never stored locally)
 - Generate a 12-word recovery seed phrase
+- Set up your vault with owner role
 
 **Important:** Save your recovery seed phrase securely. You will need it if you forget your master password.
 
-### 2. Sync an Environment File
+### 2. Add Team Members (Multi-User)
+
+As the vault owner, add collaborators:
 
 ```bash
-vty sync production .env.production
+vty add-user pablo
 ```
 
-This compresses, encrypts, and uploads your environment file to GitHub.
+This will:
+- Ask for your password (to verify ownership)
+- Prompt for pablo's password
+- Generate pablo's recovery seed phrase
+- Set pablo's role (viewer by default, can be changed)
 
-### 3. Pull Secrets
+### 3. Other Users: Unlock the Vault
+
+Team members unlock the vault to access secrets:
+
+```bash
+vty unlock
+```
+
+This will:
+- Ask for username and password
+- Decrypt their copy of the masterKey
+- Create a session (valid for 24h or until logout)
+
+### 4. Sync Secrets
+
+```bash
+vty push production .env.production
+```
+
+This compresses, encrypts, and uploads your environment file to GitHub. Only works when vault is unlocked.
+
+### 5. Pull Secrets
 
 ```bash
 vty pull production
@@ -122,32 +152,61 @@ vty pull production
 
 Download and decrypt the environment file to your current directory.
 
-### 4. List Your Secrets
+### 6. Lock or Logout
+
+Lock without logging out:
 
 ```bash
-vty list
+vty lock
 ```
 
-View all stored environment files and SSH keys.
+Fully logout (clear credentials):
+
+```bash
+vty logout
+```
 
 ---
 
 ## Commands
 
+### Vault Management
+
 | Command | Description | Example |
 |---------|-------------|---------|
 | `vty init` | Initialize or link to a GitHub repository | `vty init` |
+| `vty unlock` | Decrypt vault and create session (multi-user) | `vty unlock` |
+| `vty lock` | Lock vault without logging out | `vty lock` |
+| `vty logout` | Clear stored master password | `vty logout` |
+| `vty unlink` | Unlink Vaulty (keeps GitHub data) | `vty unlink` |
+
+### Secret Management
+
+| Command | Description | Example |
+|---------|-------------|---------|
 | `vty sync <name> <path>` | Sync an environment file to vault | `vty sync api .env` |
 | `vty sync-ssh <name> <key_path>` | Sync an SSH private key | `vty sync-ssh work ~/.ssh/id_rsa` |
+| `vty push <name>` | Push secrets to vault | `vty push api` |
 | `vty pull <name>` | Pull and decrypt secrets | `vty pull api` |
 | `vty list` | List all secrets in the vault | `vty list` |
 | `vty list --type=env` | List only environment files | `vty list --type=env` |
 | `vty list --type=ssh` | List only SSH keys | `vty list --type=ssh` |
 | `vty delete <name>` | Delete a secret from the vault | `vty delete api` |
 | `vty delete <name> --type=ssh` | Delete an SSH key | `vty delete work --type=ssh` |
+
+### Multi-User Management
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `vty add-user <username>` | Owner adds a collaborator (requires your password) | `vty add-user pablo` |
+| `vty remove-user <username>` | Owner removes a user and rotates masterKey | `vty remove-user pablo` |
+| `vty transfer-owner <username>` | Transfer ownership to another user | `vty transfer-owner pablo` |
+
+### Recovery & Configuration
+
+| Command | Description | Example |
+|---------|-------------|---------|
 | `vty recover --seed "..."` | Recover vault using seed phrase | `vty recover --seed "word1 word2 ..."` |
-| `vty logout` | Clear stored master password | `vty logout` |
-| `vty unlink` | Unlink Vaulty (keeps GitHub data) | `vty unlink` |
 | `vty config cache-duration [duration]` | Get/set password cache duration | `vty config cache-duration 30m` |
 
 ---
@@ -159,9 +218,20 @@ Vaulty takes security seriously:
 - **Encryption** — AES-256-GCM with randomly generated salts and IVs
 - **Key Derivation** — PBKDF2 with 100,000 iterations
 - **Device Salt** — Unique per-machine salt for additional security
+- **MasterKey** — Single encryption key for all vault data, never stored on disk (memory-only during session)
+- **Per-User Keys** — Each user's password encrypts their copy of the masterKey
 - **Password Storage** — OS keyring (macOS Keychain, Linux Secret Service, Windows Credential Manager) with memory cache fallback
 - **No Plaintext** — Secrets are never stored in plaintext locally or on GitHub
-- **Recovery** — BIP39 seed phrase for password recovery without exposing secrets
+- **Recovery** — BIP39 seed phrase per user for password recovery without exposing secrets
+- **Membership Validation** — User access validated on every pull/push/sync operation
+- **Automatic Key Rotation** — MasterKey rotated when users are removed, all remaining users re-encrypted
+
+### Multi-User Security
+
+- **Role-Based Access** — Owner (admin), Editor (write), Viewer (read-only)
+- **Auto-Unlink** — User automatically unlinked if removed from vault during operations
+- **Cached Encryption** — Vault cached locally with 24h TTL, encrypted with user password
+- **Session Management** — MasterKey loaded only during session, locked/cleared on logout
 
 ### Password Cache
 
@@ -198,6 +268,8 @@ Configuration is stored at `~/.vty/config.json`:
 {
   "repo": "owner/my-vault",
   "device_salt": "base64-encoded-salt",
+  "current_user": "ana",
+  "current_role": "owner",
   "cache_duration": "15m",
   "storage_type": "auto"
 }
@@ -209,6 +281,20 @@ Configuration is stored at `~/.vty/config.json`:
 - `keyring` — Force OS keyring (fails if unavailable)
 - `memory` — Use memory-only storage (password cleared on logout)
 
+### GitHub Vault Structure
+
+```
+.vaulty/
+├── metadata.json           ← Repo owner, user list, version
+├── vault.enc              ← All secrets encrypted with masterKey
+├── keys/
+│   ├── ana.enc            ← MasterKey encrypted with ana's password
+│   └── pablo.enc          ← MasterKey encrypted with pablo's password
+└── recovery/
+    ├── ana.recovery       ← Ana's recovery seed phrase
+    └── pablo.recovery     ← Pablo's recovery seed phrase
+```
+
 ---
 
 ## Roadmap
@@ -217,7 +303,7 @@ Features planned for future releases:
 
 ### High Priority
 
-- [ ] **Multi-user Support** — Multiple users/colaborators per vault with access control
+- [x] **Multi-User Support** — Multiple users/colaborators per vault with access control 
 - [ ] **Environments** — Native support for develop, staging, and production environments with isolation
 - [ ] **Team Resources** — Share skills, agents.md, documentation, and utilities (encrypted or plaintext)
 - [ ] **CI/CD Integration** — Seamless injection of environment variables in pipelines without .env files on servers
@@ -226,7 +312,7 @@ Features planned for future releases:
 
 - [ ] **Stats Command** — View vault statistics (secret count, size, last sync, storage usage)
 - [ ] **Status Command** — Check current status: linked/unlinked, last sync, storage type, cache status
-- [ ] **Lock/Unlock** — Lock vault to read-only mode (pull allowed, sync/push blocked). Requires unlock for writes
+- [x] **Lock/Unlock** — Lock vault to read-only mode (pull allowed, sync/push blocked). Requires unlock for writes 
 - [ ] **Modular Downloads** — Option to download only specific secrets instead of entire vault metadata
 - [ ] **Security Mode** — Server mode that always requires password input (no caching)
 - [ ] **Config View** — Display current configuration with `vty config` (no subcommand)
