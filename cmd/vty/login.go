@@ -118,7 +118,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	fmt.Println(ui.MutedStyle.Render("Downloading encrypted keys..."))
-	keyPath := fmt.Sprintf("keys/%s.enc", username)
+	keyPath := fmt.Sprintf(".vaulty/keys/%s.enc", username)
 	keyResp, err := client.GetContent(ctx, owner, repo, keyPath)
 	if err != nil {
 		return fmt.Errorf("downloading user keys: %w", err)
@@ -148,7 +148,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println(ui.MutedStyle.Render("Downloading vault..."))
-	vaultResp, err := client.GetContent(ctx, owner, repo, "vault.enc")
+	vaultResp, err := client.GetContent(ctx, owner, repo, ".vaulty/vault.enc")
 	if err != nil {
 		return fmt.Errorf("downloading vault: %w", err)
 	}
@@ -173,13 +173,10 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println(ui.MutedStyle.Render("Validating user..."))
-	metadataResp, err := client.GetContent(ctx, owner, repo, "metadata.vty")
-	if err != nil {
 
-		metadataResp, err = client.GetContent(ctx, owner, repo, "metadata.json")
-		if err != nil {
-			return fmt.Errorf("downloading metadata: %w", err)
-		}
+	metadataResp, err := client.GetContent(ctx, owner, repo, ".vaulty/metadata.json")
+	if err != nil {
+		return fmt.Errorf("downloading metadata: %w", err)
 	}
 
 	metadataEncData, err := client.DecodeContent(metadataResp)

@@ -79,9 +79,9 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Downloading keys/%s.enc...", cfg.CurrentUser)))
+	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Downloading .vaulty/keys/%s.enc...", cfg.CurrentUser)))
 
-	keyPath := fmt.Sprintf("keys/%s.enc", cfg.CurrentUser)
+	keyPath := fmt.Sprintf(".vaulty/keys/%s.enc", cfg.CurrentUser)
 	keyResp, err := client.GetContent(ctx, owner, repo, keyPath)
 	if err != nil {
 		return fmt.Errorf("failed to download owner key: %w", err)
@@ -194,7 +194,7 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println(ui.MutedStyle.Render("Uploading files to GitHub..."))
 
-	err = client.PutContent(ctx, owner, repo, fmt.Sprintf("keys/%s.enc", username), github.ContentRequest{
+	err = client.PutContent(ctx, owner, repo, fmt.Sprintf(".vaulty/keys/%s.enc", username), github.ContentRequest{
 		Message: fmt.Sprintf("Add user %s", username),
 		Content: masterKeyContent,
 	})

@@ -88,7 +88,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	_, err = client.GetContent(ctx, owner, repo, ".vaulty/metadata.vty")
+	_, err = client.GetContent(ctx, owner, repo, ".vaulty/metadata.json")
 	if err == nil {
 		return fmt.Errorf("vault already exists at %s - use 'vty link' to connect to an existing vault", repoFull)
 	}
@@ -105,10 +105,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	if err := initializeNewRepo(ctx, client, owner, repo, cfg, passStorage); err != nil {
 		return err
-	}
-
-	if err := cfg.Save(""); err != nil {
-		return fmt.Errorf("saving config: %w", err)
 	}
 
 	return nil
@@ -251,7 +247,7 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 	}
 
 	metadataContent := base64.StdEncoding.EncodeToString(metadataJSON)
-	err = client.PutContent(ctx, owner, repo, ".vaulty/metadata.vty", github.ContentRequest{
+	err = client.PutContent(ctx, owner, repo, ".vaulty/metadata.json", github.ContentRequest{
 		Message: "Add metadata",
 		Content: metadataContent,
 	})
@@ -335,6 +331,10 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 	fmt.Println()
 
 	cfg.Metadata = metadata
+
+	if err := cfg.Save(""); err != nil {
+		return fmt.Errorf("saving config: %w", err)
+	}
 
 	fmt.Println()
 	fmt.Println(ui.InfoStyle.Render("🔐 Creating your session..."))

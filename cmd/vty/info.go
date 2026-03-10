@@ -73,9 +73,8 @@ func runInfo(cmd *cobra.Command, args []string) error {
 
 	masterKey := currentSession.MasterKey
 	vaultData, err := crypto.DecryptVaultData(&crypto.EncryptedData{
-		Salt:       []byte(vaultEncData[:32]),
-		IV:         []byte(vaultEncData[32:48]),
-		Ciphertext: []byte(vaultEncData[48:]),
+		IV:         vaultEncData[:12],
+		Ciphertext: vaultEncData[12:],
 	}, masterKey)
 	if err != nil {
 		return fmt.Errorf("decrypting vault: %w", err)
