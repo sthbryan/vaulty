@@ -79,6 +79,40 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
+	fmt.Println(ui.MutedStyle.Render("Downloading metadata..."))
+
+	metadataBytes, err := client.GetMetadata(ctx, owner, repo)
+	if err != nil {
+		return fmt.Errorf("failed to download metadata: %w", err)
+	}
+
+	var metadata config.Metadata
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		return fmt.Errorf("parsing metadata: %w", err)
+	}
+
+	var ownerEntry *config.UserEntry
+	for i := range metadata.Users {
+		if metadata.Users[i].Username == cfg.CurrentUser {
+			ownerEntry = &metadata.Users[i]
+			break
+		}
+	}
+
+	if ownerEntry == nil {
+		return fmt.Errorf("owner entry not found in metadata")
+	}
+
+	if ownerEntry.PasswordChallenge != "" {
+		if !crypto.ValidatePasswordChallenge(ownerPassword, ownerEntry.PasswordChallenge) {
+			fmt.Println()
+			fmt.Println(ui.ErrorStyle.Render("❌ Invalid password"))
+			fmt.Println()
+			return fmt.Errorf("password validation failed")
+		}
+	}
+
+	fmt.Println()
 	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Downloading .vaulty/keys/%s.enc...", cfg.CurrentUser)))
 
 	keyPath := fmt.Sprintf(".vaulty/keys/%s.enc", cfg.CurrentUser)
@@ -108,17 +142,7 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Checking metadata..."))
-
-	metadataBytes, err := client.GetMetadata(ctx, owner, repo)
-	if err != nil {
-		return fmt.Errorf("failed to download metadata: %w", err)
-	}
-
-	var metadata config.Metadata
-	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
-		return fmt.Errorf("parsing metadata: %w", err)
-	}
+	fmt.Println(ui.MutedStyle.Render("Checking if user exists..."))
 
 	for _, user := range metadata.Users {
 		if user.Username == username {
@@ -172,6 +196,11 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("encrypting master key: %w", err)
 	}
 
+	newUserChallenge, err := crypto.GeneratePasswordChallenge(newPassword1)
+	if err != nil {
+		return fmt.Errorf("generating password challenge: %w", err)
+	}
+
 	masterKeyBytes := crypto.SerializeEncryptedData(encryptedMasterKey)
 	masterKeyContent := base64.StdEncoding.EncodeToString(masterKeyBytes)
 
@@ -181,9 +210,10 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	}
 
 	metadata.Users = append(metadata.Users, config.UserEntry{
-		Username:  username,
-		Role:      "viewer",
-		CreatedAt: time.Now(),
+		Username:          username,
+		Role:              "viewer",
+		CreatedAt:         time.Now(),
+		PasswordChallenge: newUserChallenge,
 	})
 
 	metadataJSON, err := json.MarshalIndent(metadata, "", "  ")
