@@ -303,16 +303,13 @@ Features planned for future releases:
 
 ### High Priority
 
-- [x] **Multi-User Support** — Multiple users/colaborators per vault with access control 
 - [ ] **Environments** — Native support for develop, staging, and production environments with isolation
 - [ ] **Team Resources** — Share skills, agents.md, documentation, and utilities (encrypted or plaintext)
 - [ ] **CI/CD Integration** — Seamless injection of environment variables in pipelines without .env files on servers
 
 ### Medium Priority
 
-- [ ] **Stats Command** — View vault statistics (secret count, size, last sync, storage usage)
 - [ ] **Status Command** — Check current status: linked/unlinked, last sync, storage type, cache status
-- [x] **Lock/Unlock** — Lock vault to read-only mode (pull allowed, sync/push blocked). Requires unlock for writes 
 - [ ] **Modular Downloads** — Option to download only specific secrets instead of entire vault metadata
 - [ ] **Security Mode** — Server mode that always requires password input (no caching)
 - [ ] **Config View** — Display current configuration with `vty config` (no subcommand)
