@@ -54,6 +54,10 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid config: %w", err)
 	}
 
+	if err := cfg.ValidateAndRefreshSession(); err != nil {
+		return fmt.Errorf("session validation failed: %w", err)
+	}
+
 	owner, repo, err := github.ParseRepo(cfg.Repo)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
