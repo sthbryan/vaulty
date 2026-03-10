@@ -2,17 +2,19 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
-	"os/exec"
-	"regexp"
-	"strings"
+	"io"
 	"time"
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/crypto"
 	"github.com/sthbryan/vaulty/internal/github"
+	"github.com/sthbryan/vaulty/internal/password"
 	"github.com/sthbryan/vaulty/internal/ui"
 )
 
@@ -31,14 +33,13 @@ var initCmd = &cobra.Command{
 	Long: `Initialize Vaulty by creating or linking a GitHub repository.
 
 This command will guide you through:
-  • Creating a new private repository
-  • Linking an existing repository
-  • Configuring your local Vaulty settings`,
+  • Setting up a secure master password
+  • Linking your GitHub repository
+  • Creating a recovery seed phrase`,
 	RunE: runInit,
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-
 	fmt.Println()
 	fmt.Println(lipgloss.NewStyle().
 		Foreground(lipgloss.Color(ui.Primary)).
@@ -48,192 +49,191 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println(ui.MutedStyle.Render("  Secure secret management powered by GitHub"))
 	fmt.Println()
 
-	var choice string
-	err := huh.NewSelect[string]().
-		Title("What would you like to do?").
-		Options(
-			huh.NewOption("Create a new repository", "create"),
-			huh.NewOption("Link an existing repository", "link"),
-		).
-		Value(&choice).
+	var repoInput string
+	err := huh.NewInput().
+		Title("Repository").
+		Placeholder("owner/repo").
+		Value(&repoInput).
+		Validate(func(s string) error {
+			if s == "" {
+				return fmt.Errorf("repository is required")
+			}
+			_, _, err := github.ParseRepo(s)
+			return err
+		}).
 		Run()
 	if err != nil {
 		return fmt.Errorf("form cancelled")
 	}
 
-	var repo string
-	if choice == "create" {
-		repo = createNewRepo()
-	} else {
-		repo = linkExistingRepo()
+	owner, repo, _ := github.ParseRepo(repoInput)
+	repoFull := fmt.Sprintf("%s/%s", owner, repo)
+
+	token, err := github.GetGitHubToken()
+	if err != nil {
+		return fmt.Errorf("GitHub authentication: %w", err)
 	}
 
-	if repo == "" {
-		return fmt.Errorf("no repository configured")
-	}
+	client := github.NewClient(token)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	fmt.Println()
+	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Checking repository %s...", repoFull)))
+
+	canaryResp, err := client.GetContent(ctx, owner, repo, ".vaulty/canary.vty")
+	isNewRepo := err != nil
 
 	cfg := &config.Config{}
-	cfg.SetRepo(repo)
+	cfg.SetRepo(repoFull)
+
+	passStorage, err := password.NewStorage()
+	if err != nil {
+		return fmt.Errorf("password storage: %w", err)
+	}
+
+	if isNewRepo {
+		if err := initializeNewRepo(ctx, client, owner, repo, cfg, passStorage); err != nil {
+			return err
+		}
+	} else {
+		if err := linkExistingRepo(ctx, client, owner, repo, canaryResp, cfg, passStorage); err != nil {
+			return err
+		}
+	}
 
 	if err := cfg.Save(""); err != nil {
 		return fmt.Errorf("saving config: %w", err)
 	}
 
+	return nil
+}
+
+func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo string, cfg *config.Config, passStorage password.Storage) error {
+	fmt.Println(ui.InfoStyle.Render("🔐 Create your master password"))
 	fmt.Println()
-	fmt.Println(ui.SuccessStyle.Render(fmt.Sprintf("✅ Vaulty initialized with repository: %s", repo)))
-	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("   Config saved to: %s", config.DefaultPath())))
+
+	var password1, password2 string
+
+	err := huh.NewInput().
+		Title("Master password").
+		Placeholder("Enter a strong password").
+		EchoMode(huh.EchoModePassword).
+		Value(&password1).
+		Validate(func(s string) error {
+			if len(s) < 8 {
+				return fmt.Errorf("password must be at least 8 characters")
+			}
+			return nil
+		}).
+		Run()
+	if err != nil {
+		return fmt.Errorf("form cancelled")
+	}
+
+	err = huh.NewInput().
+		Title("Confirm password").
+		Placeholder("Re-enter your password").
+		EchoMode(huh.EchoModePassword).
+		Value(&password2).
+		Validate(func(s string) error {
+			if s != password1 {
+				return fmt.Errorf("passwords do not match")
+			}
+			return nil
+		}).
+		Run()
+	if err != nil {
+		return fmt.Errorf("form cancelled")
+	}
+
+	deviceSalt := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, deviceSalt); err != nil {
+		return fmt.Errorf("generating device salt: %w", err)
+	}
+	cfg.DeviceSalt = deviceSalt
+
+	canary, err := crypto.GenerateCanary(password1, deviceSalt)
+	if err != nil {
+		return fmt.Errorf("generating canary: %w", err)
+	}
+
+	canaryContent := base64.StdEncoding.EncodeToString(canary)
+	err = client.PutContent(ctx, owner, repo, ".vaulty/canary.vty", github.ContentRequest{
+		Message: "Initialize Vaulty repository",
+		Content: canaryContent,
+	})
+	if err != nil {
+		return fmt.Errorf("uploading canary: %w", err)
+	}
+
+	seedPhrase, err := crypto.GenerateRecoverySeed()
+	if err != nil {
+		return fmt.Errorf("generating recovery seed: %w", err)
+	}
+
+	if err := passStorage.Set(password1); err != nil {
+		return fmt.Errorf("storing password: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println(ui.SuccessStyle.Render("✅ Repository initialized successfully!"))
+	fmt.Println()
+	fmt.Println(ui.WarningStyle.Render("⚠️  IMPORTANT: Save your recovery seed phrase"))
+	fmt.Println()
+	fmt.Println(ui.InfoStyle.Render("Recovery seed phrase:"))
+	fmt.Println(lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ui.Warning)).
+		Bold(true).
+		Render(seedPhrase))
+	fmt.Println()
+	fmt.Println(ui.MutedStyle.Render("Write this down and store it securely. You will need it to recover"))
+	fmt.Println(ui.MutedStyle.Render("your vault if you forget your master password."))
 	fmt.Println()
 
 	return nil
 }
 
-func createNewRepo() string {
-	fmt.Println()
-	fmt.Println(ui.InfoStyle.Render("Creating a new private repository..."))
+func linkExistingRepo(ctx context.Context, client *github.Client, owner, repo string, canaryResp *github.ContentResponse, cfg *config.Config, passStorage password.Storage) error {
+	fmt.Println(ui.InfoStyle.Render("🔗 Linking existing repository"))
 	fmt.Println()
 
-	var name string
-	for {
-		err := huh.NewInput().
-			Title("Repository name").
-			Placeholder("my-vault-secrets").
-			Value(&name).
-			Validate(func(s string) error {
-				if s == "" {
-					return fmt.Errorf("name is required")
-				}
-				if !isValidRepoName(s) {
-					return fmt.Errorf("invalid repository name")
-				}
-				return nil
-			}).
-			Run()
-		if err != nil {
-			return ""
-		}
-		break
-	}
-
-	username, err := getGitHubUsername()
+	canaryData, err := client.DecodeContent(canaryResp)
 	if err != nil {
-		fmt.Println(ui.ErrorStyle.Render(fmt.Sprintf("Error: %v", err)))
-		return ""
+		return fmt.Errorf("decoding canary: %w", err)
 	}
 
-	repo := fmt.Sprintf("%s/%s", username, name)
-
-	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Creating private repository %s...", repo)))
-
-	cmd := exec.Command("gh", "repo", "create", name, "--private", "--description", "Vaulty secrets repository", "--confirm")
-	output, err := cmd.CombinedOutput()
+	var password string
+	err = huh.NewInput().
+		Title("Master password").
+		Placeholder("Enter your master password").
+		EchoMode(huh.EchoModePassword).
+		Value(&password).
+		Run()
 	if err != nil {
-
-		if strings.Contains(string(output), "already exists") {
-			fmt.Println(ui.WarningStyle.Render(fmt.Sprintf("Repository %s already exists", repo)))
-			return repo
-		}
-		fmt.Println(ui.ErrorStyle.Render(fmt.Sprintf("Failed to create repository: %s", string(output))))
-		return ""
+		return fmt.Errorf("form cancelled")
 	}
 
-	time.Sleep(2 * time.Second)
+	deviceSalt := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, deviceSalt); err != nil {
+		return fmt.Errorf("generating device salt: %w", err)
+	}
+	cfg.DeviceSalt = deviceSalt
 
-	fmt.Println(ui.SuccessStyle.Render(fmt.Sprintf("✓ Repository %s created", repo)))
-	return repo
-}
+	if err := crypto.ValidateCanary(canaryData, password, deviceSalt); err != nil {
+		fmt.Println()
+		fmt.Println(ui.ErrorStyle.Render("❌ Wrong password. Use 'vty recover' if forgotten."))
+		return fmt.Errorf("invalid password")
+	}
 
-func linkExistingRepo() string {
+	if err := passStorage.Set(password); err != nil {
+		return fmt.Errorf("storing password: %w", err)
+	}
+
 	fmt.Println()
-	fmt.Println(ui.InfoStyle.Render("🔗 Linking an existing repository..."))
-	fmt.Println()
+	fmt.Println(ui.SuccessStyle.Render("✅ Linked successfully! Welcome back."))
 
-	var url string
-	for {
-		err := huh.NewInput().
-			Title("Repository URL or owner/repo").
-			Placeholder("https://github.com/owner/repo or owner/repo").
-			Value(&url).
-			Validate(func(s string) error {
-				if s == "" {
-					return fmt.Errorf("URL is required")
-				}
-				return nil
-			}).
-			Run()
-		if err != nil {
-			return ""
-		}
-
-		owner, repo, err := parseRepoFromInput(url)
-		if err != nil {
-			fmt.Println(ui.ErrorStyle.Render(fmt.Sprintf("Invalid format: %v", err)))
-			continue
-		}
-
-		repoFull := fmt.Sprintf("%s/%s", owner, repo)
-
-		fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Verifying repository %s...", repoFull)))
-
-		token, err := github.GetGitHubToken()
-		if err != nil {
-			fmt.Println(ui.ErrorStyle.Render(fmt.Sprintf("GitHub authentication: %v", err)))
-			continue
-		}
-
-		client := github.NewClient(token)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		_, err = client.ListDirectory(ctx, owner, repo, "")
-		if err != nil {
-			fmt.Println(ui.ErrorStyle.Render(fmt.Sprintf("Cannot access repository: %v", err)))
-			continue
-		}
-
-		fmt.Println(ui.SuccessStyle.Render(fmt.Sprintf("✓ Repository verified: %s", repoFull)))
-		return repoFull
-	}
-}
-
-func getGitHubUsername() (string, error) {
-	cmd := exec.Command("gh", "api", "user", "-q", ".login")
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("getting GitHub username: %w", err)
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
-func parseRepoFromInput(input string) (owner, repo string, err error) {
-	input = strings.TrimSpace(input)
-
-	if strings.Contains(input, "github.com") {
-
-		re := regexp.MustCompile(`github\.com[/:]([^/]+)/([^/]+?)(?:\.git)?$`)
-		matches := re.FindStringSubmatch(input)
-		if len(matches) == 3 {
-			return matches[1], strings.TrimSuffix(matches[2], ".git"), nil
-		}
-		return "", "", fmt.Errorf("could not parse GitHub URL")
-	}
-
-	return github.ParseRepo(input)
-}
-
-func isValidRepoName(name string) bool {
-	if name == "" {
-		return false
-	}
-
-	if len(name) > 100 {
-		return false
-	}
-	if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "-") {
-		return false
-	}
-	re := regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
-	return re.MatchString(name)
+	return nil
 }
 
 func init() {
