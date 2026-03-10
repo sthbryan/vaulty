@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/DeadBryam/vaulty/internal/config"
+	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/session"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/charmbracelet/lipgloss"
@@ -16,203 +17,127 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	listType string
-)
-
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all secrets in the vault",
-	Long: `List all secrets stored in your Vaulty repository.
+	Long: `List all secrets stored in your Vaulty vault.
 
-This command retrieves and displays all environment files and SSH keys
-stored in your configured GitHub repository with their metadata.
-
-Examples:
-  vty list              # List all secrets
-  vty list --type=env   # List only environment secrets
-  vty list --type=ssh   # List only SSH keys`,
+Shows name, type, size, and when each secret was last updated.
+Requires an active session (use 'vty unlock' first).`,
 	RunE: runList,
 }
 
-type ListItem struct {
-	Name     string
-	Type     string
-	Modified time.Time
-	Size     int64
-}
-
 func runList(cmd *cobra.Command, args []string) error {
-
 	cfg, err := config.Load("")
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return fmt.Errorf("loading config: %w", err)
 	}
 
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("configuration error: %w", err)
+	if cfg.Repo == "" {
+		return fmt.Errorf("Vaulty not initialized. Run 'vty init' first")
 	}
 
-	token, err := github.GetGitHubToken()
-	if err != nil {
-		return fmt.Errorf("failed to get GitHub token: %w", err)
+	mgr := session.GetManager()
+	currentSession := mgr.Get(cfg.CurrentUser)
+	if currentSession == nil || currentSession.MasterKey == nil {
+		return fmt.Errorf("no active session. Run 'vty unlock' first")
 	}
 
 	owner, repo, err := github.ParseRepo(cfg.Repo)
 	if err != nil {
-		return fmt.Errorf("invalid repo format: %w", err)
+		return fmt.Errorf("invalid repo in config: %w", err)
+	}
+
+	token, err := github.GetGitHubToken()
+	if err != nil {
+		return fmt.Errorf("GitHub authentication: %w", err)
 	}
 
 	client := github.NewClient(token)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	fmt.Println()
-	fmt.Println(ui.InfoStyle.Render("🔐 Fetching secrets from GitHub..."))
-	fmt.Println()
+	fmt.Println(ui.MutedStyle.Render("Fetching vault contents..."))
 
-	var items []ListItem
-
-	if listType == "all" || listType == "env" {
-		envItems, err := listDirectory(ctx, client, owner, repo, "envs", "env")
-		if err != nil {
-			ui.PrintWarning("Could not list envs directory: %v", err)
-		} else {
-			items = append(items, envItems...)
-		}
+	vaultResp, err := client.GetContent(ctx, owner, repo, ".vaulty/vault.enc")
+	if err != nil {
+		return fmt.Errorf("failed to fetch vault: %w", err)
 	}
 
-	if listType == "all" || listType == "ssh" {
-		sshItems, err := listDirectory(ctx, client, owner, repo, "ssh", "ssh")
-		if err != nil {
-			ui.PrintWarning("Could not list ssh directory: %v", err)
-		} else {
-			items = append(items, sshItems...)
-		}
+	vaultEncData, err := client.DecodeContent(vaultResp)
+	if err != nil {
+		return fmt.Errorf("decoding vault: %w", err)
 	}
 
-	if len(items) == 0 {
-		fmt.Println(ui.MutedStyle.Render("No secrets found in vault"))
+	masterKey := currentSession.MasterKey
+	vaultData, err := crypto.DecryptVaultData(&crypto.EncryptedData{
+		Salt:       []byte(vaultEncData[:32]),
+		IV:         []byte(vaultEncData[32:48]),
+		Ciphertext: []byte(vaultEncData[48:]),
+	}, masterKey)
+	if err != nil {
+		return fmt.Errorf("decrypting vault: %w", err)
+	}
+
+	var vaultContents map[string]models.VaultFile
+	if err := json.Unmarshal(vaultData, &vaultContents); err != nil {
+		return fmt.Errorf("parsing vault: %w", err)
+	}
+
+	if len(vaultContents) == 0 {
 		fmt.Println()
+		fmt.Println(ui.InfoStyle.Render("No secrets found in vault"))
 		return nil
 	}
 
-	renderTable(items)
-
-	fmt.Println()
-	fmt.Println(ui.InfoStyle.Render(fmt.Sprintf("📊 Total: %d secret(s)", len(items))))
-	fmt.Println()
-
-	return nil
-}
-
-func listDirectory(ctx context.Context, client *github.Client, owner, repo, dirPath, itemType string) ([]ListItem, error) {
-	var items []ListItem
-
-	dirItems, err := client.ListDirectory(ctx, owner, repo, dirPath)
-	if err != nil {
-
-		if strings.Contains(err.Error(), "404") {
-			return items, nil
-		}
-		return items, err
-	}
-
-	for _, item := range dirItems {
-
-		if item.Type != "file" {
-			continue
-		}
-
-		name := item.Name
-		if strings.HasSuffix(name, ".json") {
-			name = strings.TrimSuffix(name, ".json")
-		}
-
-		listItem := ListItem{
-			Name: name,
-			Type: itemType,
-			Size: int64(item.Size),
-		}
-
-		content, err := client.GetContent(ctx, owner, repo, item.Path)
-		if err == nil && content != nil {
-
-			decoded, err := client.DecodeContent(content)
-			if err == nil {
-
-				var vaultFile models.VaultFile
-				if err := json.Unmarshal(decoded, &vaultFile); err == nil {
-					listItem.Modified = vaultFile.Metadata.UpdatedAt
-					listItem.Size = vaultFile.Metadata.Size
-				}
-			}
-		}
-
-		items = append(items, listItem)
-	}
-
-	return items, nil
-}
-
-func renderTable(items []ListItem) {
-
-	primary := lipgloss.Color("#7C3AED")
-	success := lipgloss.Color("#10B981")
-	muted := lipgloss.Color("#6B7280")
-
-	headerStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(primary).
-		Padding(0, 1)
-
-	cellStyle := lipgloss.NewStyle().
-		Padding(0, 1)
-
-	envStyle := lipgloss.NewStyle().
-		Foreground(success).
-		Bold(true)
-
-	sshStyle := lipgloss.NewStyle().
-		Foreground(primary).
-		Bold(true)
-
-	rows := [][]string{
-		{headerStyle.Render("Name"), headerStyle.Render("Type"), headerStyle.Render("Modified"), headerStyle.Render("Size")},
-	}
-
-	for _, item := range items {
-
-		var typeStr string
-		if item.Type == "env" {
-			typeStr = envStyle.Render("🔐 env")
-		} else {
-			typeStr = sshStyle.Render("🔑 ssh")
-		}
-
-		modifiedStr := "Unknown"
-		if !item.Modified.IsZero() {
-			modifiedStr = item.Modified.Format("2006-01-02 15:04")
-		}
-
-		sizeStr := ui.FormatBytes(item.Size)
-
-		rows = append(rows, []string{
-			cellStyle.Render(item.Name),
-			typeStr,
-			cellStyle.Render(modifiedStr),
-			cellStyle.Render(sizeStr),
+	var secrets []models.SecretInfo
+	for name, vaultFile := range vaultContents {
+		secrets = append(secrets, models.SecretInfo{
+			Name:      name,
+			Type:      vaultFile.Metadata.Type,
+			CreatedAt: vaultFile.Metadata.CreatedAt,
+			UpdatedAt: vaultFile.Metadata.UpdatedAt,
+			Size:      vaultFile.Metadata.Size,
 		})
 	}
 
+	renderSecretTable(secrets)
+	return nil
+}
+
+func renderSecretTable(secrets []models.SecretInfo) {
+	fmt.Println()
+
 	t := table.New().
-		Border(lipgloss.RoundedBorder()).
-		BorderStyle(lipgloss.NewStyle().Foreground(muted)).
-		Rows(rows...)
+		Border(lipgloss.NormalBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == 0 {
+				return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary))
+			}
+			if row%2 == 0 {
+				return lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+			}
+			return lipgloss.NewStyle()
+		}).
+		Headers("NAME", "TYPE", "SIZE", "UPDATED")
+
+	for _, secret := range secrets {
+		t.Row(
+			secret.Name,
+			string(secret.Type),
+			fmt.Sprintf("%d bytes", secret.Size),
+			secret.UpdatedAt.Format("2006-01-02 15:04"),
+		)
+	}
 
 	fmt.Println(t.Render())
+	fmt.Println()
+	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Total: %d secrets", len(secrets))))
+	fmt.Println()
 }
 
 func init() {
-	listCmd.Flags().StringVar(&listType, "type", "all", "Filter by type: env, ssh, or all")
 	rootCmd.AddCommand(listCmd)
 }
