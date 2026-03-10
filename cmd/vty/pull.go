@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/DeadBryam/vaulty/internal/compress"
 	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/github"
@@ -157,12 +159,22 @@ func pullSecretWithSession(name, secretType, targetUser string, sess *session.Se
 
 	logger.Info("🔓 Decrypting...")
 	hexData := string(encodedData)
-	plaintext, err := crypto.DecryptBinary(hexData, sess.MasterKey)
+	vaultJSON, err := crypto.DecryptBinary(hexData, sess.MasterKey)
 	if err != nil {
 		if err == crypto.ErrDecryptionFailed {
 			return fmt.Errorf("decryption failed: invalid password")
 		}
 		return fmt.Errorf("decrypting: %w", err)
+	}
+
+	var vaultFile BinaryVaultFile
+	if err := json.Unmarshal(vaultJSON, &vaultFile); err != nil {
+		return fmt.Errorf("parsing vault file: %w", err)
+	}
+
+	plaintext, err := compress.Decompress(vaultFile.Data)
+	if err != nil {
+		return fmt.Errorf("decompressing data: %w", err)
 	}
 
 	outputFile, err := getOutputFilename(name, secretType)
