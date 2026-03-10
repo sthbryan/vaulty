@@ -120,15 +120,6 @@ func ValidateRecoverySeed(seed string) (string, error) {
 	return seed, nil
 }
 
-func ValidateOwnerPassword(ownerPassword, challenge string) error {
-	if !ValidatePasswordChallenge(ownerPassword, challenge) {
-		return errors.New("invalid owner password")
-	}
-	return nil
-}
-
-// ValidatePasswordWithChallenge validates a password against a PasswordChallenge struct
-// This is used by config.PasswordChallenge which has Salt and Challenge as separate fields
 func ValidatePasswordWithChallenge(password string, salt, challenge []byte) bool {
 	if len(salt) == 0 || len(challenge) == 0 {
 		return false
@@ -138,14 +129,11 @@ func ValidatePasswordWithChallenge(password string, salt, challenge []byte) bool
 	h.Write(salt)
 	computed := h.Sum(nil)
 
-	// Constant time comparison to prevent timing attacks
 	return hmac.Equal(computed, challenge)
 }
 
-// GeneratePasswordChallenge generates a new PasswordChallenge for a password
-// Returns salt and challenge as separate byte slices
 func GeneratePasswordChallengeStruct(password string) ([]byte, []byte, error) {
-	salt := make([]byte, 32) // SaltSize
+	salt := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
 		return nil, nil, fmt.Errorf("failed to generate salt: %w", err)
 	}

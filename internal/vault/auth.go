@@ -75,8 +75,8 @@ func ValidateAndLoadVault(ctx context.Context, cfg *config.Config, ghClient *git
 		}
 	}
 
-	if userEntry != nil && userEntry.PasswordChallenge != "" {
-		if !crypto.ValidatePasswordChallenge(pwd, userEntry.PasswordChallenge) {
+	if userEntry != nil && userEntry.PasswordChallenge != nil {
+		if !crypto.ValidatePasswordWithChallenge(pwd, userEntry.PasswordChallenge.Salt, userEntry.PasswordChallenge.Challenge) {
 			return nil, fmt.Errorf("password validation failed")
 		}
 	}
