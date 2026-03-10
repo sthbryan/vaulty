@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/huh"
@@ -110,12 +112,27 @@ func runInit(cmd *cobra.Command, args []string) error {
 }
 
 func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo string, cfg *config.Config, passStorage password.Storage) error {
+	fmt.Println(ui.InfoStyle.Render("📦 Creating repository..."))
+
+	_, err := client.ListDirectory(ctx, owner, repo, "")
+	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Repository %s/%s does not exist, creating...", owner, repo)))
+			if err := createGitHubRepo(repo); err != nil {
+				return fmt.Errorf("creating repository: %w", err)
+			}
+			time.Sleep(2 * time.Second)
+		} else {
+			return fmt.Errorf("checking repository: %w", err)
+		}
+	}
+
 	fmt.Println(ui.InfoStyle.Render("🔐 Create your master password"))
 	fmt.Println()
 
 	var password1, password2 string
 
-	err := huh.NewInput().
+	err = huh.NewInput().
 		Title("Master password").
 		Placeholder("Enter a strong password").
 		EchoMode(huh.EchoModePassword).
@@ -233,6 +250,15 @@ func linkExistingRepo(ctx context.Context, client *github.Client, owner, repo st
 	fmt.Println()
 	fmt.Println(ui.SuccessStyle.Render("✅ Linked successfully! Welcome back."))
 
+	return nil
+}
+
+func createGitHubRepo(repoName string) error {
+	cmd := exec.Command("gh", "repo", "create", repoName, "--private", "--description", "Vaulty secrets repository", "--confirm")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s", string(output))
+	}
 	return nil
 }
 
