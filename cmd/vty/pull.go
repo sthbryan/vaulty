@@ -13,6 +13,7 @@ import (
 	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/password"
+	"github.com/DeadBryam/vaulty/internal/session"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/charmbracelet/huh"
@@ -52,6 +53,15 @@ func runPull(cmd *cobra.Command, args []string) error {
 
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid config: %w", err)
+	}
+
+	if cfg.CurrentUser == "" {
+		return fmt.Errorf("no active session. Run 'vty login' first")
+	}
+
+	sess := session.GetManager().Get(cfg.CurrentUser)
+	if sess == nil || !sess.IsActive() {
+		return fmt.Errorf("session expired or invalid. Run 'vty login' first")
 	}
 
 	if err := cfg.ValidateAndRefreshSession(); err != nil {
