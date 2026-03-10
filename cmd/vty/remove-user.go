@@ -99,6 +99,36 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
+	fmt.Println(ui.MutedStyle.Render("Downloading metadata..."))
+
+	metadataBytes, err := client.GetMetadata(ctx, owner, repoName)
+	if err != nil {
+		return fmt.Errorf("failed to download metadata: %w", err)
+	}
+
+	var metadata config.Metadata
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		return fmt.Errorf("parsing metadata: %w", err)
+	}
+
+	var ownerEntry *config.UserEntry
+	for i := range metadata.Users {
+		if metadata.Users[i].Username == cfg.CurrentUser {
+			ownerEntry = &metadata.Users[i]
+			break
+		}
+	}
+
+	if ownerEntry != nil && ownerEntry.PasswordChallenge != "" {
+		if !crypto.ValidatePasswordChallenge(verifyPassword, ownerEntry.PasswordChallenge) {
+			fmt.Println()
+			fmt.Println(ui.ErrorStyle.Render("❌ Invalid password"))
+			fmt.Println()
+			return fmt.Errorf("password validation failed")
+		}
+	}
+
+	fmt.Println()
 	ui.PrintInfo("Downloading old master key...")
 
 	oldKeyResp, err := client.GetUserKeys(ctx, owner, repoName, cfg.Metadata.Owner)
@@ -159,17 +189,7 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to encrypt vault: %w", err)
 	}
 
-	ui.PrintInfo("Downloading metadata...")
-
-	metadataData, err := client.GetMetadata(ctx, owner, repoName)
-	if err != nil {
-		return fmt.Errorf("failed to get metadata: %w", err)
-	}
-
-	metadata := &config.Metadata{}
-	if err := json.Unmarshal(metadataData, metadata); err != nil {
-		return fmt.Errorf("failed to parse metadata: %w", err)
-	}
+	ui.PrintInfo("Removing user from metadata...")
 
 	oldUserCount := len(metadata.Users)
 
