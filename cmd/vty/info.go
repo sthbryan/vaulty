@@ -141,15 +141,56 @@ func renderDetailedVaultInfo(cfg *config.Config, secrets []models.SecretInfo, la
 		fmt.Println()
 	}
 
-	fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== SUMMARY ==="))
 	totalSize := int64(0)
+	envCount := 0
+	sshCount := 0
 	for _, s := range secrets {
 		totalSize += s.Size
+		switch s.Type {
+		case models.SecretTypeEnv:
+			envCount++
+		case models.SecretTypeSSH:
+			sshCount++
+		}
 	}
 
-	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Total Secrets: %d", len(secrets))))
-	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Total Size: %s", formatSize(totalSize))))
-	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Last Sync: %s", formatTime(lastSync))))
+	fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== SUMMARY ==="))
+	fmt.Println()
+
+	fmt.Printf("  Total Secrets: %s (", ui.HighlightStyle.Render(fmt.Sprintf("%d", len(secrets))))
+	fmt.Printf("%s env + ", ui.HighlightStyle.Render(fmt.Sprintf("%d", envCount)))
+	fmt.Printf("%s ssh)\n", ui.HighlightStyle.Render(fmt.Sprintf("%d", sshCount)))
+	fmt.Printf("  Total Size:    %s (", ui.HighlightStyle.Render(formatSize(totalSize)))
+	fmt.Printf("%s env + ", ui.HighlightStyle.Render(formatSize(calculateTypeSize(secrets, models.SecretTypeEnv))))
+	fmt.Printf("%s ssh)\n", ui.HighlightStyle.Render(formatSize(calculateTypeSize(secrets, models.SecretTypeSSH))))
+	fmt.Println()
+
+	if cfg.CurrentUserRole == "owner" && cfg.Metadata != nil {
+		ownerCount := 0
+		editorCount := 0
+		viewerCount := 0
+		for _, u := range cfg.Metadata.Users {
+			switch u.Role {
+			case "owner":
+				ownerCount++
+			case "editor":
+				editorCount++
+			case "viewer":
+				viewerCount++
+			}
+		}
+		fmt.Printf("  Users: %s total", ui.HighlightStyle.Render(fmt.Sprintf("%d", len(cfg.Metadata.Users))))
+		if len(cfg.Metadata.Users) > 0 {
+			fmt.Printf(" (%d owner, %d editor, %d viewer)", ownerCount, editorCount, viewerCount)
+		}
+		fmt.Println()
+		fmt.Println()
+	}
+
+	fmt.Printf("  Repository:    %s\n", cfg.Repo)
+	fmt.Printf("  Last Sync:     %s\n", ui.HighlightStyle.Render(formatTime(lastSync)))
+	fmt.Printf("  Last Updated:  %s\n", ui.HighlightStyle.Render(formatTime(cfg.UpdatedAt)))
+	fmt.Printf("  Created:       %s\n", ui.HighlightStyle.Render(formatTime(cfg.CreatedAt)))
 	fmt.Println()
 }
 
@@ -220,6 +261,16 @@ func formatSize(bytes int64) string {
 	default:
 		return fmt.Sprintf("%.1fMB", float64(bytes)/float64(MB))
 	}
+}
+
+func calculateTypeSize(secrets []models.SecretInfo, secretType models.SecretType) int64 {
+	var total int64
+	for _, s := range secrets {
+		if s.Type == secretType {
+			total += s.Size
+		}
+	}
+	return total
 }
 
 func formatTime(t time.Time) string {
