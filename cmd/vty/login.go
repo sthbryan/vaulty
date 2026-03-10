@@ -199,9 +199,9 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println(ui.MutedStyle.Render("Decrypting vault..."))
-	encryptedVault, err := crypto.DeserializeEncryptedData(vaultEncData)
-	if err != nil {
-		return fmt.Errorf("deserializing encrypted vault: %w", err)
+	encryptedVault := &crypto.EncryptedData{
+		IV:         vaultEncData[:12],
+		Ciphertext: vaultEncData[12:],
 	}
 
 	vaultData, err := crypto.DecryptVaultData(encryptedVault, masterKey)
