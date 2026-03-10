@@ -44,7 +44,9 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("Vaulty not initialized. Run 'vty init' first")
 	}
 
-	if cfg.CurrentUser != "" {
+	mgr := session.GetManager()
+	existingSession := mgr.Get(cfg.CurrentUser)
+	if cfg.CurrentUser != "" && existingSession != nil && existingSession.MasterKey != nil {
 		relogin, err := ui.AskConfirm(fmt.Sprintf("Already logged in as %s. Re-login with different user?", cfg.CurrentUser), false)
 		if err != nil {
 			return fmt.Errorf("confirmation failed: %w", err)

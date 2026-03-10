@@ -64,7 +64,7 @@ func ValidateAndLoadVault(ctx context.Context, cfg *config.Config, ghClient *git
 
 	pwd, err := passStorage.Get()
 	if err != nil || pwd == "" {
-		return nil, fmt.Errorf("password not found - run 'vty unlock'")
+		return nil, fmt.Errorf("password not found - run 'vty login'")
 	}
 
 	userKeysResp, err := ghClient.GetUserKeys(ctx, owner, repo, cfg.CurrentUser)
