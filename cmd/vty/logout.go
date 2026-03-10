@@ -3,9 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/DeadBryam/vaulty/internal/cache"
 	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/password"
 	"github.com/DeadBryam/vaulty/internal/session"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
@@ -26,7 +24,7 @@ func runLogout(cmd *cobra.Command, args []string) error {
 	}
 
 	if cfg.CurrentUser == "" {
-		return fmt.Errorf("no active session - run 'vty init' or 'vty recover' first")
+		return fmt.Errorf("no active session - run 'vty login' first")
 	}
 
 	sm := session.GetManager()
@@ -47,26 +45,13 @@ func runLogout(cmd *cobra.Command, args []string) error {
 		sm.Delete(cfg.CurrentUser)
 	}
 
-	storage, err := password.NewStorage()
-	if err != nil {
-		return fmt.Errorf("password storage: %w", err)
-	}
-
-	if err := storage.Delete(); err != nil {
-		return fmt.Errorf("failed to clear password: %w", err)
-	}
-
-	cacheManager := cache.NewCacheManager(storage)
-	if err := cacheManager.Delete(cfg.CurrentUser); err != nil {
-		return fmt.Errorf("failed to delete cache: %w", err)
-	}
-
+	// Clear current user from config
 	cfg.ClearCurrentUser()
 	if err := cfg.Save(""); err != nil {
 		return fmt.Errorf("failed to update config: %w", err)
 	}
 
-	fmt.Println("✅ Logged out. Run 'vty unlock' to access vault again.")
+	fmt.Println("✅ Logged out. Cache and config kept. Run 'vty login' to access vault again.")
 
 	return nil
 }
