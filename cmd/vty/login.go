@@ -232,6 +232,10 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("password storage: %w", err)
 	}
 
+	if err := passStorage.Set(masterPassword); err != nil {
+		logger.Warn("failed to save password for auto-reauthentication", "error", err)
+	}
+
 	cacheManager := cache.NewCacheManager(passStorage)
 	if err := cacheManager.Save(username, vaultData); err != nil {
 		logger.Warn("failed to cache vault data", "error", err)

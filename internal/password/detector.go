@@ -22,5 +22,18 @@ func NewStorage() (Storage, error) {
 		return keyringStorage, nil
 	}
 
+	fileStorage, err := NewFileStorage()
+	if err == nil {
+		_, err = fileStorage.Get()
+		if err == nil {
+			return fileStorage, nil
+		}
+		testErr := fileStorage.Set("__test__")
+		if testErr == nil {
+			fileStorage.Delete()
+			return fileStorage, nil
+		}
+	}
+
 	return NewMemoryStorage(), nil
 }

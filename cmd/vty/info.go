@@ -2,15 +2,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/github"
-	"github.com/DeadBryam/vaulty/internal/session"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/charmbracelet/lipgloss"
@@ -38,10 +36,8 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("Vaulty not initialized. Run 'vty init' first")
 	}
 
-	mgr := session.GetManager()
-	currentSession := mgr.Get(cfg.CurrentUser)
-	if currentSession == nil || currentSession.MasterKey == nil {
-		return fmt.Errorf("no active session. Run 'vty login' first")
+	if cfg.CurrentUser == "" {
+		return fmt.Errorf("no user configured. Run 'vty login' first")
 	}
 
 	owner, repo, err := github.ParseRepo(cfg.Repo)
@@ -61,45 +57,44 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println(ui.MutedStyle.Render("Fetching vault contents..."))
 
-	vaultResp, err := client.GetContent(ctx, owner, repo, ".vaulty/vault.enc")
-	if err != nil {
-		return fmt.Errorf("failed to fetch vault: %w", err)
+	var secrets []models.SecretInfo
+
+	envItems, err := client.ListDirectory(ctx, owner, repo, "envs")
+	if err == nil {
+		for _, item := range envItems {
+			if strings.HasSuffix(item.Name, ".vty") {
+				name := strings.TrimSuffix(item.Name, ".vty")
+				secrets = append(secrets, models.SecretInfo{
+					Name:      name,
+					Type:      models.SecretTypeEnv,
+					CreatedAt: time.Time{},
+					UpdatedAt: time.Time{},
+					Size:      int64(item.Size),
+				})
+			}
+		}
 	}
 
-	vaultEncData, err := client.DecodeContent(vaultResp)
-	if err != nil {
-		return fmt.Errorf("decoding vault: %w", err)
+	sshItems, err := client.ListDirectory(ctx, owner, repo, "ssh")
+	if err == nil {
+		for _, item := range sshItems {
+			if strings.HasSuffix(item.Name, ".vty") {
+				name := strings.TrimSuffix(item.Name, ".vty")
+				secrets = append(secrets, models.SecretInfo{
+					Name:      name,
+					Type:      models.SecretTypeSSH,
+					CreatedAt: time.Time{},
+					UpdatedAt: time.Time{},
+					Size:      int64(item.Size),
+				})
+			}
+		}
 	}
 
-	masterKey := currentSession.MasterKey
-	vaultData, err := crypto.DecryptVaultData(&crypto.EncryptedData{
-		IV:         vaultEncData[:12],
-		Ciphertext: vaultEncData[12:],
-	}, masterKey)
-	if err != nil {
-		return fmt.Errorf("decrypting vault: %w", err)
-	}
-
-	var vaultContents map[string]models.VaultFile
-	if err := json.Unmarshal(vaultData, &vaultContents); err != nil {
-		return fmt.Errorf("parsing vault: %w", err)
-	}
-
-	if len(vaultContents) == 0 {
+	if len(secrets) == 0 {
 		fmt.Println()
 		fmt.Println(ui.InfoStyle.Render("No secrets found in vault"))
 		return nil
-	}
-
-	var secrets []models.SecretInfo
-	for name, vaultFile := range vaultContents {
-		secrets = append(secrets, models.SecretInfo{
-			Name:      name,
-			Type:      vaultFile.Metadata.Type,
-			CreatedAt: vaultFile.Metadata.CreatedAt,
-			UpdatedAt: vaultFile.Metadata.UpdatedAt,
-			Size:      vaultFile.Metadata.Size,
-		})
 	}
 
 	sort.Slice(secrets, func(i, j int) bool {
