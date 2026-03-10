@@ -3,8 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/DeadBryam/vaulty/internal/config"
+	"github.com/DeadBryam/vaulty/internal/password"
+	"github.com/DeadBryam/vaulty/internal/session"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -34,16 +37,28 @@ func runUnlink(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// Check if session is active and logout first
+	sessionMgr := session.GetManager()
+	activeUsers := sessionMgr.All()
+	if len(activeUsers) > 0 {
+		logger.Info("Clearing active sessions...")
+		sessionMgr.Clear()
+	}
+
 	fmt.Println()
-	logger.Warn("⚠️  WARNING: You are about to unlink Vaulty!")
-	logger.Warn("   This will delete your local configuration file:")
-	logger.Warn(fmt.Sprintf("   %s", configPath))
+	logger.Warn("⚠️  WARNING: This will unlink Vaulty completely!")
+	logger.Warn("   Local data will be removed:")
+	logger.Warn(fmt.Sprintf("   - Configuration: %s", configPath))
+	home, _ := os.UserHomeDir()
+	cacheDir := filepath.Join(home, ".vty", "cache")
+	logger.Warn(fmt.Sprintf("   - Cache directory: %s", cacheDir))
+	logger.Warn("   - Stored password")
 	fmt.Println()
 	logger.Info("   Your encrypted secrets in GitHub will NOT be affected.")
 	fmt.Println()
 
 	if !unlinkForce {
-		confirmed, err := ui.AskConfirm("   Are you sure you want to unlink Vaulty?", false)
+		confirmed, err := ui.AskConfirm("   Are you sure you want to unlink?", false)
 		if err != nil {
 			return fmt.Errorf("failed to get confirmation: %w", err)
 		}
@@ -54,17 +69,35 @@ func runUnlink(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Delete config.json
 	if err := os.Remove(configPath); err != nil {
 		logger.Error("Failed to delete config file", "error", err)
 		return fmt.Errorf("deleting config: %w", err)
 	}
 
+	// Clear all sessions
+	sessionMgr.Clear()
+
+	// Delete cache directory
+	home, err := os.UserHomeDir()
+	if err == nil {
+		cacheDir := filepath.Join(home, ".vty", "cache")
+		if err := os.RemoveAll(cacheDir); err != nil && !os.IsNotExist(err) {
+			logger.Warn("Failed to delete cache directory", "error", err)
+		}
+	}
+
+	// Clear password from storage
+	passStorage, err := password.NewStorage()
+	if err == nil {
+		if err := passStorage.Delete(); err != nil {
+			logger.Warn("Failed to delete stored password", "error", err)
+		}
+	}
+
 	fmt.Println()
-	logger.Info("✅ Vaulty has been unlinked successfully!")
-	logger.Info(fmt.Sprintf("   Config deleted: %s", configPath))
+	logger.Info("✅ Vaulty unlinked. All local data removed. GitHub vault untouched.")
 	fmt.Println()
-	logger.Info("Your secrets remain safe in GitHub.")
-	logger.Info("Run 'vty init' to link Vaulty again.")
 
 	return nil
 }
