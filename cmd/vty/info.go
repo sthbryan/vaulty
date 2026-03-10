@@ -24,7 +24,7 @@ var infoCmd = &cobra.Command{
 	Long: `Display all secrets stored in your Vaulty vault.
 
 Shows name, type, size, and when each secret was last updated.
-Requires an active session (use 'vty unlock' first).`,
+Requires an active session (use 'vty login' first).`,
 	RunE: runInfo,
 }
 
@@ -41,7 +41,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	mgr := session.GetManager()
 	currentSession := mgr.Get(cfg.CurrentUser)
 	if currentSession == nil || currentSession.MasterKey == nil {
-		return fmt.Errorf("no active session. Run 'vty unlock' first")
+		return fmt.Errorf("no active session. Run 'vty login' first")
 	}
 
 	owner, repo, err := github.ParseRepo(cfg.Repo)
