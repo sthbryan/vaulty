@@ -101,8 +101,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Check if vault already exists on GitHub
-	_, err = client.ListDirectory(ctx, owner, repo, "")
+	// Check if vault already exists on GitHub (look for metadata.vty)
+	_, err = client.GetContent(ctx, owner, repo, ".vaulty/metadata.vty")
 	if err == nil {
 		return fmt.Errorf("vault already exists at %s - use 'vty link' to connect to an existing vault", repoFull)
 	}
