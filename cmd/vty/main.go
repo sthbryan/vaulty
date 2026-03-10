@@ -40,6 +40,8 @@ func init() {
 		Level:           log.InfoLevel,
 	})
 	rootCmd.AddCommand(deleteCmd)
+	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(recoverCmd)
 }
 
 func main() {
