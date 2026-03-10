@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 )
 
@@ -889,5 +890,75 @@ func TestMasterKeyRoundTrip(t *testing.T) {
 
 	if !bytes.Equal(vaultData, decryptedVault) {
 		t.Error("vault data mismatch after encryption/decryption")
+	}
+}
+
+func TestGeneratePasswordChallenge(t *testing.T) {
+	password := "testpassword123"
+	challenge, err := GeneratePasswordChallenge(password)
+	if err != nil {
+		t.Fatalf("GeneratePasswordChallenge() error = %v", err)
+	}
+
+	if challenge == "" {
+		t.Error("GeneratePasswordChallenge() returned empty challenge")
+	}
+
+	if !strings.Contains(challenge, ":") {
+		t.Error("GeneratePasswordChallenge() challenge missing colon separator")
+	}
+}
+
+func TestValidatePasswordChallenge(t *testing.T) {
+	password := "testpassword123"
+	challenge, _ := GeneratePasswordChallenge(password)
+
+	if !ValidatePasswordChallenge(password, challenge) {
+		t.Error("ValidatePasswordChallenge() failed for correct password")
+	}
+
+	if ValidatePasswordChallenge("wrongpassword", challenge) {
+		t.Error("ValidatePasswordChallenge() should fail for wrong password")
+	}
+
+	if ValidatePasswordChallenge(password, "invalid:challenge") {
+		t.Error("ValidatePasswordChallenge() should fail for invalid challenge format")
+	}
+}
+
+func TestValidatePasswordChallenge_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name      string
+		password  string
+		challenge string
+		want      bool
+	}{
+		{
+			name:      "empty challenge",
+			password:  "test",
+			challenge: "",
+			want:      false,
+		},
+		{
+			name:      "missing colon",
+			password:  "test",
+			challenge: "abcdef",
+			want:      false,
+		},
+		{
+			name:      "colon at start",
+			password:  "test",
+			challenge: ":abcdef",
+			want:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ValidatePasswordChallenge(tt.password, tt.challenge)
+			if got != tt.want {
+				t.Errorf("ValidatePasswordChallenge() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

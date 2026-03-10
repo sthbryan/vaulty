@@ -117,3 +117,10 @@ func ValidateRecoverySeed(seed string) (string, error) {
 
 	return seed, nil
 }
+
+func ValidateOwnerPassword(ownerPassword, challenge string) error {
+	if !ValidatePasswordChallenge(ownerPassword, challenge) {
+		return errors.New("invalid owner password")
+	}
+	return nil
+}

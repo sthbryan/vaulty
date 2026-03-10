@@ -451,3 +451,47 @@ func DecryptWithKey(data *EncryptedData, key []byte) ([]byte, error) {
 
 	return plaintext, nil
 }
+
+func GeneratePasswordChallenge(password string) (string, error) {
+	salt := make([]byte, SaltSize)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		return "", fmt.Errorf("failed to generate salt: %w", err)
+	}
+
+	h := hmac.New(sha256.New, []byte(password))
+	h.Write(salt)
+	hash := h.Sum(nil)
+
+	challenge := fmt.Sprintf("%x:%x", salt, hash)
+	return challenge, nil
+}
+
+func ValidatePasswordChallenge(password, challenge string) bool {
+	parts := len(challenge)
+	colonPos := -1
+	for i := 0; i < parts && i < len(challenge); i++ {
+		if challenge[i] == ':' {
+			colonPos = i
+			break
+		}
+	}
+
+	if colonPos == -1 || colonPos == 0 {
+		return false
+	}
+
+	saltHex := challenge[:colonPos]
+	expectedHashHex := challenge[colonPos+1:]
+
+	salt := make([]byte, len(saltHex)/2)
+	if _, err := fmt.Sscanf(saltHex, "%x", &salt); err != nil {
+		return false
+	}
+
+	h := hmac.New(sha256.New, []byte(password))
+	h.Write(salt)
+	computedHash := h.Sum(nil)
+	computedHashHex := fmt.Sprintf("%x", computedHash)
+
+	return hmac.Equal([]byte(computedHashHex), []byte(expectedHashHex))
+}
