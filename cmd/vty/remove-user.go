@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
@@ -249,10 +248,7 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to marshal vault: %w", err)
 	}
 
-	err = client.PutContent(ctx, owner, repoName, ".vaulty/vault.enc", github.ContentRequest{
-		Message: fmt.Sprintf("Remove user %s and rotate master key", username),
-		Content: base64.StdEncoding.EncodeToString(newVaultJSON),
-	})
+	err = client.PutVault(ctx, owner, repoName, newVaultJSON)
 	if err != nil {
 		return fmt.Errorf("failed to upload vault: %w", err)
 	}

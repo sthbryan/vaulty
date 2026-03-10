@@ -206,16 +206,12 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		Challenge: challenge,
 	}
 
-	masterKeyBytes := make([]byte, 0)
-	masterKeyBytes = append(masterKeyBytes, encryptedMasterKey.Salt...)
-	masterKeyBytes = append(masterKeyBytes, encryptedMasterKey.IV...)
-	masterKeyBytes = append(masterKeyBytes, encryptedMasterKey.Ciphertext...)
+	masterKeyJSON, err := json.Marshal(encryptedMasterKey)
+	if err != nil {
+		return fmt.Errorf("marshaling master key: %w", err)
+	}
 
-	masterKeyContent := base64.StdEncoding.EncodeToString(masterKeyBytes)
-	err = client.PutContent(ctx, owner, repo, fmt.Sprintf(".vaulty/keys/%s.enc", username), github.ContentRequest{
-		Message: "Add encrypted master key",
-		Content: masterKeyContent,
-	})
+	err = client.PutUserKeys(ctx, owner, repo, username, masterKeyJSON)
 	if err != nil {
 		return fmt.Errorf("uploading master key: %w", err)
 	}
@@ -225,15 +221,12 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		return fmt.Errorf("creating vault: %w", err)
 	}
 
-	vaultBytes := make([]byte, 0)
-	vaultBytes = append(vaultBytes, emptyVault.IV...)
-	vaultBytes = append(vaultBytes, emptyVault.Ciphertext...)
+	vaultJSON, err := json.Marshal(emptyVault)
+	if err != nil {
+		return fmt.Errorf("marshaling vault: %w", err)
+	}
 
-	vaultContent := base64.StdEncoding.EncodeToString(vaultBytes)
-	err = client.PutContent(ctx, owner, repo, ".vaulty/vault.enc", github.ContentRequest{
-		Message: "Create empty vault",
-		Content: vaultContent,
-	})
+	err = client.PutVault(ctx, owner, repo, vaultJSON)
 	if err != nil {
 		return fmt.Errorf("uploading vault: %w", err)
 	}

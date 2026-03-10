@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -207,7 +206,6 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	}
 
 	masterKeyBytes := crypto.SerializeEncryptedData(encryptedMasterKey)
-	masterKeyContent := base64.StdEncoding.EncodeToString(masterKeyBytes)
 
 	recoverySeeds, err := crypto.GenerateRecoverySeed()
 	if err != nil {
@@ -229,10 +227,7 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println(ui.MutedStyle.Render("Uploading files to GitHub..."))
 
-	err = client.PutContent(ctx, owner, repo, fmt.Sprintf(".vaulty/keys/%s.enc", username), github.ContentRequest{
-		Message: fmt.Sprintf("Add user %s", username),
-		Content: masterKeyContent,
-	})
+	err = client.PutUserKeys(ctx, owner, repo, username, masterKeyBytes)
 	if err != nil {
 		return fmt.Errorf("uploading key: %w", err)
 	}
@@ -247,8 +242,7 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("marshaling encrypted seed: %w", err)
 	}
 
-	recoveryContent := base64.StdEncoding.EncodeToString(encryptedSeedJSON)
-	err = client.PutRecoverySeed(ctx, owner, repo, username, []byte(recoveryContent))
+	err = client.PutRecoverySeed(ctx, owner, repo, username, encryptedSeedJSON)
 	if err != nil {
 		return fmt.Errorf("uploading recovery seed: %w", err)
 	}

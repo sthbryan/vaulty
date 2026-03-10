@@ -170,9 +170,9 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println(ui.MutedStyle.Render("Decrypting master key..."))
-	encryptedKey, err := crypto.DeserializeEncryptedData(keyData)
-	if err != nil {
-		return fmt.Errorf("deserializing encrypted key: %w", err)
+	encryptedKey := &crypto.EncryptedData{}
+	if err := json.Unmarshal(keyData, encryptedKey); err != nil {
+		return fmt.Errorf("parsing master key JSON: %w", err)
 	}
 
 	masterKey, err := crypto.DecryptMasterKeyWithPassword(encryptedKey, masterPassword)
@@ -199,9 +199,9 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println(ui.MutedStyle.Render("Decrypting vault..."))
-	encryptedVault := &crypto.EncryptedData{
-		IV:         vaultEncData[:12],
-		Ciphertext: vaultEncData[12:],
+	encryptedVault := &crypto.EncryptedData{}
+	if err := json.Unmarshal(vaultEncData, encryptedVault); err != nil {
+		return fmt.Errorf("parsing vault JSON: %w", err)
 	}
 
 	vaultData, err := crypto.DecryptVaultData(encryptedVault, masterKey)

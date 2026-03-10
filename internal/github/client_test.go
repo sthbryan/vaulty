@@ -113,13 +113,12 @@ func TestParseRepo(t *testing.T) {
 func TestClientGetContent(t *testing.T) {
 	t.Run("successfully gets file content", func(t *testing.T) {
 		content := ContentResponse{
-			Name:     "test.txt",
-			Path:     "path/to/test.txt",
-			Sha:      "abc123",
-			Size:     12,
-			Type:     "file",
-			Content:  base64.StdEncoding.EncodeToString([]byte("hello world")),
-			Encoding: "base64",
+			Name:    "test.txt",
+			Path:    "path/to/test.txt",
+			Sha:     "abc123",
+			Size:    12,
+			Type:    "file",
+			Content: base64.StdEncoding.EncodeToString([]byte("hello world")),
 		}
 
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -304,8 +303,7 @@ func TestClientDecodeContent(t *testing.T) {
 	t.Run("decodes base64 content", func(t *testing.T) {
 		original := []byte("hello world")
 		content := ContentResponse{
-			Content:  base64.StdEncoding.EncodeToString(original),
-			Encoding: "base64",
+			Content: base64.StdEncoding.EncodeToString(original),
 		}
 
 		decoded, err := client.DecodeContent(&content)

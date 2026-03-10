@@ -109,8 +109,13 @@ func (c *Client) GetContent(ctx context.Context, owner, repo, path string) (*Con
 		return nil, fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, string(body))
 	}
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
 	var content ContentResponse
-	if err := json.NewDecoder(resp.Body).Decode(&content); err != nil {
+	if err := json.Unmarshal(body, &content); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -184,7 +189,8 @@ func (c *Client) DecodeContent(content *ContentResponse) ([]byte, error) {
 	if content.Encoding != "base64" {
 		return nil, fmt.Errorf("unsupported encoding: %s", content.Encoding)
 	}
-	return base64.StdEncoding.DecodeString(content.Content)
+	cleanContent := strings.ReplaceAll(content.Content, "\n", "")
+	return base64.StdEncoding.DecodeString(cleanContent)
 }
 
 func (c *Client) EncodeContent(data []byte) string {
@@ -248,13 +254,18 @@ func (c *Client) GetUserKeys(ctx context.Context, owner, repo, username string) 
 func (c *Client) PutUserKeys(ctx context.Context, owner, repo, username string, data []byte) error {
 	path := fmt.Sprintf(".vaulty/keys/%s.enc", username)
 	sha, err := c.getContentSha(ctx, owner, repo, path)
-	if err != nil && !strings.Contains(err.Error(), "404") {
-		return fmt.Errorf("failed to get current sha: %w", err)
+	if err != nil {
+		if !strings.Contains(err.Error(), "404") {
+			return fmt.Errorf("failed to get current sha: %w", err)
+		}
+		sha = ""
 	}
+
+	encoded := c.EncodeContent(data)
 
 	req := ContentRequest{
 		Message: fmt.Sprintf("Update keys for %s", username),
-		Content: c.EncodeContent(data),
+		Content: encoded,
 		Sha:     sha,
 	}
 
@@ -301,6 +312,34 @@ func (c *Client) PutRecoverySeed(ctx context.Context, owner, repo, username stri
 	req := ContentRequest{
 		Message: fmt.Sprintf("Update recovery seed for %s", username),
 		Content: c.EncodeContent(data),
+		Sha:     sha,
+	}
+
+	return c.PutContent(ctx, owner, repo, path, req)
+}
+
+func (c *Client) GetVault(ctx context.Context, owner, repo string) (*ContentResponse, error) {
+	path := ".vaulty/vault.enc"
+	return c.GetContent(ctx, owner, repo, path)
+}
+
+func (c *Client) PutVault(ctx context.Context, owner, repo string, data []byte) error {
+	path := ".vaulty/vault.enc"
+	sha, err := c.getContentSha(ctx, owner, repo, path)
+	action := "Update"
+	if err != nil {
+		if !strings.Contains(err.Error(), "404") {
+			return fmt.Errorf("failed to get current sha: %w", err)
+		}
+		action = "Create"
+		sha = ""
+	}
+
+	encoded := c.EncodeContent(data)
+
+	req := ContentRequest{
+		Message: action + " vault via Vaulty",
+		Content: encoded,
 		Sha:     sha,
 	}
 
@@ -354,4 +393,11 @@ func toString(v interface{}) string {
 		return s
 	}
 	return ""
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

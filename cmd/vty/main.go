@@ -16,6 +16,13 @@ var (
 
 var logger *log.Logger
 
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "vty",
 	Short: "🔐 Vaulty - Secure environment and SSH key vault",

@@ -91,14 +91,12 @@ func ValidateAndLoadVault(ctx context.Context, cfg *config.Config, ghClient *git
 		return nil, fmt.Errorf("failed to decode user keys: %w", err)
 	}
 
-	masterKey, err := crypto.DecryptMasterKeyWithPassword(
-		&crypto.EncryptedData{
-			Salt:       userKeysData[:32],
-			IV:         userKeysData[32:44],
-			Ciphertext: userKeysData[44:],
-		},
-		pwd,
-	)
+	encryptedKey := &crypto.EncryptedData{}
+	if err := json.Unmarshal(userKeysData, encryptedKey); err != nil {
+		return nil, fmt.Errorf("failed to parse master key JSON: %w", err)
+	}
+
+	masterKey, err := crypto.DecryptMasterKeyWithPassword(encryptedKey, pwd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt masterKey: %w", err)
 	}
