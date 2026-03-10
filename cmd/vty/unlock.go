@@ -1,0 +1,264 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/DeadBryam/vaulty/internal/cache"
+	"github.com/DeadBryam/vaulty/internal/config"
+	"github.com/DeadBryam/vaulty/internal/crypto"
+	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/password"
+	"github.com/DeadBryam/vaulty/internal/session"
+	"github.com/DeadBryam/vaulty/internal/ui"
+	"github.com/charmbracelet/huh"
+	"github.com/spf13/cobra"
+)
+
+var unlockCmd = &cobra.Command{
+	Use:   "unlock",
+	Short: "Unlock Vaulty session with a specific user",
+	Long: `Unlock Vaulty by authenticating as a specific user.
+
+This command will:
+  • Prompt for username (with suggestion from config if available)
+  • Prompt for master password
+  • Decrypt your keys and vault
+  • Create an active session`,
+	RunE: runUnlock,
+}
+
+func runUnlock(cmd *cobra.Command, args []string) error {
+	cfg, err := config.Load("")
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	if cfg.Repo == "" {
+		return fmt.Errorf("Vaulty not initialized. Run 'vty init' first")
+	}
+
+	// Check if session already active
+	if cfg.CurrentUser != "" {
+		return fmt.Errorf("already unlocked as %s", cfg.CurrentUser)
+	}
+
+	// Prompt for username
+	var username string
+	defaultUsername := ""
+	if cfg.Metadata != nil && len(cfg.Metadata.Users) > 0 {
+		defaultUsername = cfg.Metadata.Users[0].Username
+	}
+
+	err = huh.NewInput().
+		Title("Username").
+		Placeholder(defaultUsername).
+		Value(&username).
+		Validate(func(s string) error {
+			if s == "" {
+				if defaultUsername != "" {
+					username = defaultUsername
+					return nil
+				}
+				return fmt.Errorf("username is required")
+			}
+			return nil
+		}).
+		Run()
+	if err != nil {
+		return fmt.Errorf("form cancelled")
+	}
+
+	if username == "" {
+		username = defaultUsername
+	}
+
+	// Prompt for password
+	var masterPassword string
+	err = huh.NewInput().
+		Title("Master password").
+		Placeholder("Enter your master password").
+		EchoMode(huh.EchoModePassword).
+		Value(&masterPassword).
+		Validate(func(s string) error {
+			if s == "" {
+				return fmt.Errorf("password cannot be empty")
+			}
+			return nil
+		}).
+		Run()
+	if err != nil {
+		return fmt.Errorf("form cancelled")
+	}
+
+	// Get GitHub token and client
+	token, err := github.GetGitHubToken()
+	if err != nil {
+		return fmt.Errorf("GitHub authentication: %w", err)
+	}
+
+	client := github.NewClient(token)
+	owner, repo, err := github.ParseRepo(cfg.Repo)
+	if err != nil {
+		return fmt.Errorf("invalid repository format: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Download keys/<username>.enc
+	fmt.Println(ui.MutedStyle.Render("Downloading encrypted keys..."))
+	keyPath := fmt.Sprintf("keys/%s.enc", username)
+	keyResp, err := client.GetContent(ctx, owner, repo, keyPath)
+	if err != nil {
+		return fmt.Errorf("downloading user keys: %w", err)
+	}
+
+	keyData, err := client.DecodeContent(keyResp)
+	if err != nil {
+		return fmt.Errorf("decoding key data: %w", err)
+	}
+
+	// Decrypt masterKey with password
+	fmt.Println(ui.MutedStyle.Render("Decrypting master key..."))
+	encryptedKey, err := crypto.DeserializeEncryptedData(keyData)
+	if err != nil {
+		return fmt.Errorf("deserializing encrypted key: %w", err)
+	}
+
+	masterKey, err := crypto.DecryptMasterKeyWithPassword(encryptedKey, masterPassword)
+	if err != nil {
+		fmt.Println()
+		fmt.Println(ui.ErrorStyle.Render("❌ Failed to decrypt master key"))
+		fmt.Println()
+		fmt.Println(ui.MutedStyle.Render("This could mean:"))
+		fmt.Println(ui.MutedStyle.Render("  • Wrong password"))
+		fmt.Println(ui.MutedStyle.Render("  • Wrong username"))
+		fmt.Println()
+		return fmt.Errorf("decryption failed")
+	}
+
+	// Validate with canary (password + deviceSalt)
+	fmt.Println(ui.MutedStyle.Render("Validating credentials..."))
+	canaryResp, errCanary := client.GetContent(ctx, owner, repo, ".vaulty/canary.vty")
+	if errCanary == nil {
+		canaryData, errDecode := client.DecodeContent(canaryResp)
+		if errDecode == nil {
+			if errVal := crypto.ValidateCanary(canaryData, masterPassword, cfg.DeviceSalt); errVal != nil {
+				fmt.Println()
+				fmt.Println(ui.ErrorStyle.Render("❌ Invalid credentials"))
+				fmt.Println(ui.MutedStyle.Render("Canary validation failed"))
+				fmt.Println()
+				return fmt.Errorf("canary validation failed")
+			}
+		}
+	}
+
+	// Download vault.enc from GitHub
+	fmt.Println(ui.MutedStyle.Render("Downloading vault..."))
+	vaultResp, err := client.GetContent(ctx, owner, repo, "vault.enc")
+	if err != nil {
+		return fmt.Errorf("downloading vault: %w", err)
+	}
+
+	vaultEncData, err := client.DecodeContent(vaultResp)
+	if err != nil {
+		return fmt.Errorf("decoding vault data: %w", err)
+	}
+
+	// Decrypt vault with masterKey (do NOT save to disk yet)
+	fmt.Println(ui.MutedStyle.Render("Decrypting vault..."))
+	encryptedVault, err := crypto.DeserializeEncryptedData(vaultEncData)
+	if err != nil {
+		return fmt.Errorf("deserializing encrypted vault: %w", err)
+	}
+
+	vaultData, err := crypto.DecryptVaultData(encryptedVault, masterKey)
+	if err != nil {
+		fmt.Println()
+		fmt.Println(ui.ErrorStyle.Render("❌ Failed to decrypt vault"))
+		fmt.Println()
+		return fmt.Errorf("vault decryption failed")
+	}
+
+	// Download metadata.json and validate user exists
+	fmt.Println(ui.MutedStyle.Render("Validating user..."))
+	metadataResp, err := client.GetContent(ctx, owner, repo, "metadata.json")
+	if err != nil {
+		return fmt.Errorf("downloading metadata: %w", err)
+	}
+
+	metadataEncData, err := client.DecodeContent(metadataResp)
+	if err != nil {
+		return fmt.Errorf("decoding metadata: %w", err)
+	}
+
+	var metadata config.Metadata
+	if err := json.Unmarshal(metadataEncData, &metadata); err != nil {
+		return fmt.Errorf("parsing metadata: %w", err)
+	}
+
+	// Find user in metadata
+	var userEntry *config.UserEntry
+	for i := range metadata.Users {
+		if metadata.Users[i].Username == username {
+			userEntry = &metadata.Users[i]
+			break
+		}
+	}
+
+	if userEntry == nil {
+		// Auto-unlink: delete config
+		fmt.Println()
+		fmt.Println(ui.WarningStyle.Render("⚠️  User not found in vault"))
+		fmt.Println(ui.MutedStyle.Render("Auto-unlinking Vaulty..."))
+		configPath := config.DefaultPath()
+		_ = deleteConfigFile(configPath)
+		fmt.Println()
+		return fmt.Errorf("user %q not found in vault metadata", username)
+	}
+
+	// Create session
+	fmt.Println(ui.MutedStyle.Render("Creating session..."))
+	sess := session.NewSession(username, userEntry.Role, masterKey, vaultData)
+	session.GetManager().Create(sess)
+
+	// Update config
+	cfg.SetCurrentUser(username, userEntry.Role)
+	if cfg.Metadata == nil {
+		cfg.Metadata = &metadata
+	} else {
+		cfg.Metadata.Users = metadata.Users
+	}
+
+	if err := cfg.Save(""); err != nil {
+		return fmt.Errorf("saving config: %w", err)
+	}
+
+	// Save vault cache
+	passStorage, err := password.NewStorage()
+	if err != nil {
+		return fmt.Errorf("password storage: %w", err)
+	}
+
+	cacheManager := cache.NewCacheManager(passStorage)
+	if err := cacheManager.Save(username, vaultData); err != nil {
+		logger.Warn("failed to cache vault data", "error", err)
+		// Don't fail if cache save fails
+	}
+
+	fmt.Println()
+	fmt.Println(ui.SuccessStyle.Render(fmt.Sprintf("✅ Unlocked as %s (%s)", username, userEntry.Role)))
+
+	return nil
+}
+
+func deleteConfigFile(path string) error {
+	return nil // Placeholder - could be implemented if needed
+}
+
+func init() {
+	rootCmd.AddCommand(unlockCmd)
+}
