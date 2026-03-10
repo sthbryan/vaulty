@@ -380,6 +380,8 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 
 	fmt.Println()
 
+	cfg.Metadata = metadata
+
 	return nil
 }
 
@@ -442,6 +444,23 @@ func linkExistingRepo(ctx context.Context, client *github.Client, owner, repo st
 	if err := passStorage.Set(password); err != nil {
 		return fmt.Errorf("storing password: %w", err)
 	}
+
+	metadataResp, err := client.GetContent(ctx, owner, repo, ".vaulty/metadata.json")
+	if err != nil {
+		return fmt.Errorf("metadata not found: %w", err)
+	}
+
+	metadataData, err := client.DecodeContent(metadataResp)
+	if err != nil {
+		return fmt.Errorf("decoding metadata: %w", err)
+	}
+
+	var metadata config.Metadata
+	if err := json.Unmarshal(metadataData, &metadata); err != nil {
+		return fmt.Errorf("parsing metadata: %w", err)
+	}
+
+	cfg.Metadata = &metadata
 
 	fmt.Println()
 	fmt.Println(ui.SuccessStyle.Render("✅ Linked successfully! Welcome back."))
