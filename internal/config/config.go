@@ -37,13 +37,29 @@ func (b *Base64Bytes) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+type UserEntry struct {
+	Username  string    `json:"username"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Metadata struct {
+	Repo    string      `json:"repo"`
+	Owner   string      `json:"owner"`
+	Version string      `json:"version"`
+	Users   []UserEntry `json:"users"`
+}
+
 type Config struct {
-	Repo          string      `json:"repo"`
-	CreatedAt     time.Time   `json:"created_at"`
-	UpdatedAt     time.Time   `json:"updated_at"`
-	DeviceSalt    Base64Bytes `json:"device_salt"`
-	CacheDuration string      `json:"cache_duration"`
-	StorageType   string      `json:"storage_type"`
+	Repo            string      `json:"repo"`
+	CreatedAt       time.Time   `json:"created_at"`
+	UpdatedAt       time.Time   `json:"updated_at"`
+	DeviceSalt      Base64Bytes `json:"device_salt"`
+	CacheDuration   string      `json:"cache_duration"`
+	StorageType     string      `json:"storage_type"`
+	CurrentUser     string      `json:"current_user,omitempty"`
+	CurrentUserRole string      `json:"current_user_role,omitempty"`
+	Metadata        *Metadata   `json:"metadata,omitempty"`
 }
 
 func DefaultPath() string {
@@ -138,4 +154,58 @@ func (c *Config) SetRepo(repo string) {
 	if c.CreatedAt.IsZero() {
 		c.CreatedAt = c.UpdatedAt
 	}
+}
+
+func (c *Config) IsOwner() bool {
+	return c.CurrentUserRole == "owner"
+}
+
+func (c *Config) GetRole() string {
+	if c.CurrentUserRole == "" {
+		return ""
+	}
+	return c.CurrentUserRole
+}
+
+func (c *Config) SetCurrentUser(username, role string) {
+	c.CurrentUser = username
+	c.CurrentUserRole = role
+	c.UpdatedAt = time.Now()
+}
+
+func (c *Config) ClearCurrentUser() {
+	c.CurrentUser = ""
+	c.CurrentUserRole = ""
+	c.UpdatedAt = time.Now()
+}
+
+func (c *Config) FindUser(username string) (*UserEntry, error) {
+	if c.Metadata == nil || len(c.Metadata.Users) == 0 {
+		return nil, fmt.Errorf("no users found in metadata")
+	}
+
+	for i := range c.Metadata.Users {
+		if c.Metadata.Users[i].Username == username {
+			return &c.Metadata.Users[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("user %q not found", username)
+}
+
+func (c *Config) ValidateAndRefreshSession() error {
+	if c.CurrentUser == "" {
+		return fmt.Errorf("no active user session")
+	}
+	if c.CurrentUserRole == "" {
+		return fmt.Errorf("user role is not set")
+	}
+	user, err := c.FindUser(c.CurrentUser)
+	if err != nil {
+		return fmt.Errorf("membership validation failed: %w", err)
+	}
+	if user == nil {
+		return fmt.Errorf("user %q not found in repository members", c.CurrentUser)
+	}
+	return nil
 }
