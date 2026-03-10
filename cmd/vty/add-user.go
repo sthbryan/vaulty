@@ -15,19 +15,33 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	addUserRole string
+)
+
 var addUserCmd = &cobra.Command{
 	Use:   "add-user <username>",
 	Short: "Add a new user to the vault",
 	Long: `Add a new user to your Vaulty vault.
 
-This command allows the vault owner to add new users with viewer access.
-You must provide your master password to verify ownership.`,
+This command allows the vault owner to add new users with editor or viewer access.
+You must provide your master password to verify ownership.
+
+Examples:
+  vty add-user juan                    # Add as editor (default)
+  vty add-user juan --role viewer      # Add as viewer
+  vty add-user juan --role editor      # Add as editor`,
 	Args: cobra.ExactArgs(1),
 	RunE: runAddUser,
 }
 
 func runAddUser(cmd *cobra.Command, args []string) error {
 	username := args[0]
+
+	role := addUserRole
+	if role != "editor" && role != "viewer" {
+		return fmt.Errorf("invalid role: %s (must be 'editor' or 'viewer')", role)
+	}
 
 	cfg, err := config.Load("")
 	if err != nil {
@@ -125,9 +139,9 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decoding owner key: %w", err)
 	}
 
-	encryptedData, err := crypto.DeserializeEncryptedData(keyData)
-	if err != nil {
-		return fmt.Errorf("deserializing owner key: %w", err)
+	encryptedData := &crypto.EncryptedData{}
+	if err := json.Unmarshal(keyData, encryptedData); err != nil {
+		return fmt.Errorf("parsing owner key JSON: %w", err)
 	}
 
 	masterKey, err := crypto.DecryptMasterKeyWithPassword(encryptedData, ownerPassword)
@@ -205,7 +219,10 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		Challenge: challenge,
 	}
 
-	masterKeyBytes := crypto.SerializeEncryptedData(encryptedMasterKey)
+	masterKeyBytes, err := json.Marshal(encryptedMasterKey)
+	if err != nil {
+		return fmt.Errorf("marshaling master key: %w", err)
+	}
 
 	recoverySeeds, err := crypto.GenerateRecoverySeed()
 	if err != nil {
@@ -214,7 +231,7 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 
 	metadata.Users = append(metadata.Users, config.UserEntry{
 		Username:          username,
-		Role:              "viewer",
+		Role:              role,
 		CreatedAt:         time.Now(),
 		PasswordChallenge: newUserChallenge,
 	})
@@ -292,8 +309,8 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
-	fmt.Println(ui.InfoStyle.Render(fmt.Sprintf("📝 Username: %s", username)))
-	fmt.Println(ui.InfoStyle.Render("Role: viewer"))
+	fmt.Println(ui.InfoStyle.Render(fmt.Sprintf("Username: %s", username)))
+	fmt.Println(ui.InfoStyle.Render(fmt.Sprintf("Role: %s", role)))
 	fmt.Println()
 
 	return nil
@@ -301,4 +318,5 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 
 func init() {
 	rootCmd.AddCommand(addUserCmd)
+	addUserCmd.Flags().StringVarP(&addUserRole, "role", "r", "editor", "User role (editor or viewer)")
 }
