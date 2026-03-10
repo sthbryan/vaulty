@@ -67,6 +67,20 @@ func ValidateAndLoadVault(ctx context.Context, cfg *config.Config, ghClient *git
 		return nil, fmt.Errorf("password not found - run 'vty login'")
 	}
 
+	var userEntry *config.UserEntry
+	for i := range meta.Users {
+		if meta.Users[i].Username == cfg.CurrentUser {
+			userEntry = &meta.Users[i]
+			break
+		}
+	}
+
+	if userEntry != nil && userEntry.PasswordChallenge != "" {
+		if !crypto.ValidatePasswordChallenge(pwd, userEntry.PasswordChallenge) {
+			return nil, fmt.Errorf("password validation failed")
+		}
+	}
+
 	userKeysResp, err := ghClient.GetUserKeys(ctx, owner, repo, cfg.CurrentUser)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user keys: %w", err)
