@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -209,43 +207,9 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		return fmt.Errorf("form cancelled")
 	}
 
-	deviceSalt := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, deviceSalt); err != nil {
-		return fmt.Errorf("generating device salt: %w", err)
-	}
-	cfg.DeviceSalt = deviceSalt
-
 	masterKey, err := crypto.GenerateMasterKey()
 	if err != nil {
 		return fmt.Errorf("generating master key: %w", err)
-	}
-
-	canary, err := crypto.GenerateCanary(password1, deviceSalt)
-	if err != nil {
-		return fmt.Errorf("generating canary: %w", err)
-	}
-
-	canaryContent := base64.StdEncoding.EncodeToString(canary)
-	err = client.PutContent(ctx, owner, repo, ".vaulty/canary.vty", github.ContentRequest{
-		Message: "Initialize Vaulty repository",
-		Content: canaryContent,
-	})
-	if err != nil {
-		return fmt.Errorf("uploading canary: %w", err)
-	}
-
-	encryptedSalt, err := crypto.EncryptDeviceSalt(deviceSalt, password1)
-	if err != nil {
-		return fmt.Errorf("encrypting device salt: %w", err)
-	}
-
-	saltContent := base64.StdEncoding.EncodeToString(encryptedSalt)
-	err = client.PutContent(ctx, owner, repo, ".vaulty/salt.vty", github.ContentRequest{
-		Message: "Add device salt",
-		Content: saltContent,
-	})
-	if err != nil {
-		return fmt.Errorf("uploading device salt: %w", err)
 	}
 
 	encryptedMasterKey, err := crypto.EncryptMasterKeyWithPassword(masterKey, password1)

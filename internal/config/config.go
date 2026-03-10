@@ -1,7 +1,6 @@
 package config
 
 import (
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -54,7 +53,7 @@ type Config struct {
 	Repo            string      `json:"repo"`
 	CreatedAt       time.Time   `json:"created_at"`
 	UpdatedAt       time.Time   `json:"updated_at"`
-	DeviceSalt      Base64Bytes `json:"device_salt"`
+	DeviceSalt      Base64Bytes `json:"device_salt,omitempty"`
 	CacheDuration   string      `json:"cache_duration"`
 	StorageType     string      `json:"storage_type"`
 	CurrentUser     string      `json:"current_user,omitempty"`
@@ -101,12 +100,6 @@ func (c *Config) Save(path string) error {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
-	if c.DeviceSalt == nil || len(c.DeviceSalt) == 0 {
-		if err := c.GenerateDeviceSalt(); err != nil {
-			return fmt.Errorf("generating device salt: %w", err)
-		}
-	}
-
 	if c.CacheDuration == "" {
 		c.CacheDuration = "15m"
 	}
@@ -129,15 +122,6 @@ func (c *Config) Save(path string) error {
 		return fmt.Errorf("writing config file: %w", err)
 	}
 
-	return nil
-}
-
-func (c *Config) GenerateDeviceSalt() error {
-	salt := make([]byte, 32)
-	if _, err := rand.Read(salt); err != nil {
-		return fmt.Errorf("generating random bytes: %w", err)
-	}
-	c.DeviceSalt = salt
 	return nil
 }
 
