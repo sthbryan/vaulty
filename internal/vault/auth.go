@@ -101,7 +101,7 @@ func ValidateAndLoadVault(ctx context.Context, cfg *config.Config, ghClient *git
 		return nil, fmt.Errorf("failed to decrypt masterKey: %w", err)
 	}
 
-	vaultResp, err := ghClient.GetContent(ctx, owner, repo, ".vaulty/vault.enc")
+	vaultResp, err := ghClient.GetContent(ctx, owner, repo, ".vaulty/vault.vty")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get vault: %w", err)
 	}

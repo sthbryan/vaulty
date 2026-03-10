@@ -38,7 +38,7 @@ func (c *CacheManager) cachePath(username string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(cacheDir, username+".vault.enc"), nil
+	return filepath.Join(cacheDir, username+".vault.vty"), nil
 }
 
 func (c *CacheManager) Save(username string, vaultData []byte) error {

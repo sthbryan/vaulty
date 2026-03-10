@@ -279,7 +279,7 @@ func (c *Client) PutUserKeys(ctx context.Context, owner, repo, username string, 
 }
 
 func (c *Client) GetMetadata(ctx context.Context, owner, repo string) ([]byte, error) {
-	path := ".vaulty/metadata.json"
+	path := ".vaulty/metadata.vty"
 	content, err := c.GetContent(ctx, owner, repo, path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %w", err)
@@ -288,14 +288,14 @@ func (c *Client) GetMetadata(ctx context.Context, owner, repo string) ([]byte, e
 }
 
 func (c *Client) PutMetadata(ctx context.Context, owner, repo string, metadata []byte) error {
-	path := ".vaulty/metadata.json"
+	path := ".vaulty/metadata.vty"
 	sha, err := c.getContentSha(ctx, owner, repo, path)
 	if err != nil && !strings.Contains(err.Error(), "404") {
 		return fmt.Errorf("failed to get current sha: %w", err)
 	}
 
 	req := ContentRequest{
-		Message: "Update metadata.json via Vaulty",
+		Message: "Update metadata.vty via Vaulty",
 		Content: c.EncodeContent(metadata),
 		Sha:     sha,
 	}

@@ -63,7 +63,7 @@ func authenticateUser(cfg *config.Config, password string) (*session.Session, er
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	metadataResp, err := client.GetContent(ctx, owner, repo, ".vaulty/metadata.json")
+	metadataResp, err := client.GetContent(ctx, owner, repo, ".vaulty/metadata.vty")
 	if err != nil {
 		return nil, fmt.Errorf("downloading metadata: %w", err)
 	}
@@ -96,7 +96,7 @@ func authenticateUser(cfg *config.Config, password string) (*session.Session, er
 		}
 	}
 
-	keyPath := fmt.Sprintf(".vaulty/keys/%s.enc", cfg.CurrentUser)
+	keyPath := fmt.Sprintf(".vaulty/keys/%s.vty", cfg.CurrentUser)
 	keyResp, err := client.GetContent(ctx, owner, repo, keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("downloading user keys: %w", err)
@@ -117,7 +117,7 @@ func authenticateUser(cfg *config.Config, password string) (*session.Session, er
 		return nil, fmt.Errorf("decrypting master key: %w", err)
 	}
 
-	vaultResp, err := client.GetContent(ctx, owner, repo, ".vaulty/vault.enc")
+	vaultResp, err := client.GetContent(ctx, owner, repo, ".vaulty/vault.vty")
 	if err != nil {
 		return nil, fmt.Errorf("downloading vault: %w", err)
 	}

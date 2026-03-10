@@ -82,7 +82,7 @@ func runLink(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println(ui.MutedStyle.Render("Fetching vault metadata..."))
 
-	metadataResp, err := client.GetContent(ctx, owner, repo, ".vaulty/metadata.json")
+	metadataResp, err := client.GetContent(ctx, owner, repo, ".vaulty/metadata.vty")
 	if err != nil {
 		return fmt.Errorf("fetching vault metadata: %w", err)
 	}
