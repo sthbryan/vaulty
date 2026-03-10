@@ -15,6 +15,7 @@ import (
 	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/password"
+	"github.com/DeadBryam/vaulty/internal/session"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/spf13/cobra"
@@ -53,6 +54,23 @@ func runPush(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("name cannot start with a dot")
 	}
 
+	cfg, err := config.Load("")
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("configuration error: %w", err)
+	}
+
+	if cfg.CurrentUser == "" {
+		return fmt.Errorf("no active session. Run 'vty login' first")
+	}
+
+	sess := session.GetManager().Get(cfg.CurrentUser)
+	if sess == nil || !sess.IsActive() {
+		return fmt.Errorf("session expired or invalid. Run 'vty login' first")
+	}
+
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -62,17 +80,6 @@ func runPush(cmd *cobra.Command, args []string) error {
 	}
 	if info.IsDir() {
 		return fmt.Errorf("path must be a file, not a directory: %s", path)
-	}
-
-	cfg, err := config.Load("")
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("configuration error: %w", err)
-	}
-	if err := cfg.ValidateAndRefreshSession(); err != nil {
-		return fmt.Errorf("session validation failed: %w", err)
 	}
 
 	token, err := github.GetGitHubToken()
