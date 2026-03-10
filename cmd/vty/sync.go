@@ -87,7 +87,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("Password not found. Run 'vty init' or 'vty recover'")
 	}
 
-	ui.PrintInfo("📦 Reading file: %s", path)
+	ui.PrintInfo("Reading file: %s", path)
 
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -95,23 +95,23 @@ func runSync(cmd *cobra.Command, args []string) error {
 	}
 
 	originalSize := int64(len(content))
-	ui.PrintInfo("📊 Original size: %s", ui.FormatBytes(originalSize))
+	ui.PrintStats("Original size: %s", ui.FormatBytes(originalSize))
 
 	hash := sha256.Sum256(content)
 	checksum := fmt.Sprintf("%x", hash)
 
-	ui.PrintInfo("🗜️  Compressing...")
+	ui.PrintInfo("Compressing...")
 	compressed, err := compress.Compress(content)
 	if err != nil {
 		return fmt.Errorf("failed to compress: %w", err)
 	}
 
 	compressedSize := int64(len(compressed))
-	ui.PrintInfo("📊 Compressed size: %s (%.1f%% reduction)",
+	ui.PrintStats("Compressed size: %s (%.1f%% reduction)",
 		ui.FormatBytes(compressedSize),
 		float64(originalSize-compressedSize)/float64(originalSize)*100)
 
-	ui.PrintInfo("🔒 Encrypting...")
+	ui.PrintLock("Encrypting...")
 	encrypted, err := crypto.Encrypt(compressed, pwd)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt: %w", err)
@@ -141,28 +141,28 @@ func runSync(cmd *cobra.Command, args []string) error {
 	}
 
 	remotePath := fmt.Sprintf("envs/%s.vty", name)
-	ui.PrintInfo("☁️  Checking remote: %s/%s/%s", owner, repoName, remotePath)
+	ui.PrintCloud("Checking remote: %s/%s/%s", owner, repoName, remotePath)
 
 	var existingSha string
 	existingContent, err := client.GetContent(ctx, owner, repoName, remotePath)
 	if err == nil && existingContent != nil {
 
 		if !syncForce {
-			ui.PrintWarning("⚠️  File already exists on remote")
+			ui.PrintWarning("File already exists on remote")
 			confirmed, confirmErr := ui.AskConfirm("Overwrite existing file?", false)
 			if confirmErr != nil {
 				return fmt.Errorf("confirmation failed: %w", confirmErr)
 			}
 			if !confirmed {
-				ui.PrintInfo("❌ Sync cancelled")
+				ui.PrintInfo("Sync cancelled")
 				return nil
 			}
 		}
 		existingSha = existingContent.Sha
-		ui.PrintInfo("📝 Will overwrite existing file")
+		ui.PrintInfo("Will overwrite existing file")
 	}
 
-	ui.PrintInfo("☁️  Uploading to GitHub...")
+	ui.PrintCloud("Uploading to GitHub...")
 
 	encodedContent := base64.StdEncoding.EncodeToString(vaultData)
 	commitMsg := fmt.Sprintf("Update %s via Vaulty sync", name)
@@ -180,7 +180,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to upload: %w", err)
 	}
 
-	ui.PrintSuccess("✅ Synced successfully!")
+	ui.PrintSuccess("Synced successfully!")
 	fmt.Println()
 	fmt.Printf("  Name:    %s\n", name)
 	fmt.Printf("  Path:    %s\n", remotePath)
