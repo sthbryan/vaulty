@@ -1,13 +1,11 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 	"time"
@@ -17,14 +15,13 @@ import (
 	"github.com/sthbryan/vaulty/internal/config"
 	"github.com/sthbryan/vaulty/internal/crypto"
 	"github.com/sthbryan/vaulty/internal/github"
+	"github.com/sthbryan/vaulty/internal/password"
 	"github.com/sthbryan/vaulty/internal/ui"
 	"github.com/sthbryan/vaulty/pkg/models"
 )
 
 var (
-	syncPassword      string
-	syncPasswordStdin bool
-	syncForce         bool
+	syncForce bool
 )
 
 var syncCmd = &cobra.Command{
@@ -81,21 +78,13 @@ func runSync(cmd *cobra.Command, args []string) error {
 	}
 	client := github.NewClient(token)
 
-	password := syncPassword
-	if password == "" && syncPasswordStdin {
-		reader := bufio.NewReader(os.Stdin)
-		pwd, err := reader.ReadString('\n')
-		if err != nil && err != io.EOF {
-			return fmt.Errorf("failed to read password from stdin: %w", err)
-		}
-		password = strings.TrimSpace(pwd)
+	storage, err := password.NewStorage()
+	if err != nil {
+		return fmt.Errorf("failed to create password storage: %w", err)
 	}
-	if password == "" {
-		pwd, err := ui.AskPassword("🔐 Enter encryption password")
-		if err != nil {
-			return fmt.Errorf("failed to get password: %w", err)
-		}
-		password = pwd
+	pwd, err := storage.Get()
+	if err != nil {
+		return fmt.Errorf("Password not found. Run 'vty init' or 'vty recover'")
 	}
 
 	ui.PrintInfo("📦 Reading file: %s", path)
@@ -123,7 +112,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		float64(originalSize-compressedSize)/float64(originalSize)*100)
 
 	ui.PrintInfo("🔒 Encrypting...")
-	encrypted, err := crypto.Encrypt(compressed, password)
+	encrypted, err := crypto.Encrypt(compressed, pwd)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt: %w", err)
 	}
@@ -151,7 +140,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid repo format: %w", err)
 	}
 
-	remotePath := fmt.Sprintf("envs/%s.json", name)
+	remotePath := fmt.Sprintf("envs/%s.vty", name)
 	ui.PrintInfo("☁️  Checking remote: %s/%s/%s", owner, repoName, remotePath)
 
 	var existingSha string
@@ -205,7 +194,5 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 func init() {
 	rootCmd.AddCommand(syncCmd)
-	syncCmd.Flags().StringVar(&syncPassword, "password", "", "Password for encryption")
-	syncCmd.Flags().BoolVar(&syncPasswordStdin, "password-stdin", false, "Read password from stdin")
 	syncCmd.Flags().BoolVarP(&syncForce, "force", "f", false, "Overwrite without prompting")
 }

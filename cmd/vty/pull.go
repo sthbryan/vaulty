@@ -1,12 +1,10 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/huh"
@@ -16,14 +14,13 @@ import (
 	"github.com/sthbryan/vaulty/internal/config"
 	"github.com/sthbryan/vaulty/internal/crypto"
 	"github.com/sthbryan/vaulty/internal/github"
+	"github.com/sthbryan/vaulty/internal/password"
 	"github.com/sthbryan/vaulty/internal/ui"
 )
 
 var (
-	pullOutput        string
-	pullInteractive   bool
-	pullPassword      string
-	pullPasswordStdin bool
+	pullOutput      string
+	pullInteractive bool
 )
 
 var pullCmd = &cobra.Command{
@@ -38,9 +35,7 @@ This command will:
 
 Examples:
   vty pull myapp-prod
-  vty pull myapp-prod -o .env.production
-  vty pull myapp-prod --password mypass
-  echo "mypass" | vty pull myapp-prod --password-stdin`,
+  vty pull myapp-prod -o .env.production`,
 	Args: cobra.ExactArgs(1),
 	RunE: runPull,
 }
@@ -73,13 +68,22 @@ func runPull(cmd *cobra.Command, args []string) error {
 
 	logger.Info("☁️  Downloading from GitHub...", "name", name)
 
+	storage, err := password.NewStorage()
+	if err != nil {
+		return fmt.Errorf("initializing password storage: %w", err)
+	}
+
+	passwordStr, err := storage.Get()
+	if err != nil {
+		return fmt.Errorf("Password not found. Run 'vty init' or 'vty recover'")
+	}
+
 	var content *github.ContentResponse
 	var path string
 
 	path = fmt.Sprintf("envs/%s.vty", name)
 	content, err = client.GetContent(ctx, owner, repo, path)
 	if err != nil {
-
 		logger.Info("Not found in envs/, trying ssh/...")
 		path = fmt.Sprintf("ssh/%s.vty", name)
 		content, err = client.GetContent(ctx, owner, repo, path)
@@ -100,13 +104,8 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("deserializing encrypted data: %w", err)
 	}
 
-	password, err := getPassword()
-	if err != nil {
-		return err
-	}
-
 	logger.Info("🔓 Decrypting...")
-	compressedData, err := crypto.Decrypt(encryptedData, password)
+	compressedData, err := crypto.Decrypt(encryptedData, passwordStr)
 	if err != nil {
 		if err == crypto.ErrDecryptionFailed {
 			return fmt.Errorf("decryption failed: invalid password")
@@ -160,31 +159,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func getPassword() (string, error) {
-
-	if pullPasswordStdin {
-		reader := bufio.NewReader(os.Stdin)
-		password, err := reader.ReadString('\n')
-		if err != nil {
-			return "", fmt.Errorf("reading password from stdin: %w", err)
-		}
-		return strings.TrimSpace(password), nil
-	}
-
-	if pullPassword != "" {
-		return pullPassword, nil
-	}
-
-	password, err := ui.AskPassword("🔐 Enter decryption password")
-	if err != nil {
-		return "", fmt.Errorf("password prompt cancelled")
-	}
-
-	return password, nil
-}
-
 func getOutputFilename(name string) (string, error) {
-
 	if pullOutput != "" {
 		return pullOutput, nil
 	}
@@ -226,8 +201,6 @@ func getOutputFilename(name string) (string, error) {
 func init() {
 	pullCmd.Flags().StringVarP(&pullOutput, "output", "o", "", "Output filename (default: .env)")
 	pullCmd.Flags().BoolVarP(&pullInteractive, "interactive", "i", false, "Interactive mode (prompt for filename)")
-	pullCmd.Flags().StringVar(&pullPassword, "password", "", "Decryption password")
-	pullCmd.Flags().BoolVar(&pullPasswordStdin, "password-stdin", false, "Read password from stdin")
 
 	rootCmd.AddCommand(pullCmd)
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/sthbryan/vaulty/internal/config"
 	"github.com/sthbryan/vaulty/internal/crypto"
 	"github.com/sthbryan/vaulty/internal/github"
+	"github.com/sthbryan/vaulty/internal/password"
 	"github.com/sthbryan/vaulty/internal/ui"
 	"github.com/sthbryan/vaulty/pkg/models"
 )
@@ -113,9 +114,18 @@ func runSyncSSH(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	password, err := ui.AskPassword("🔒 Enter password to encrypt the SSH key")
+	storage, err := password.NewStorage()
 	if err != nil {
+		logger.Error("Failed to create password storage", "error", err)
 		return err
+	}
+	password, err := storage.Get()
+	if err != nil {
+		logger.Error("Failed to get password from storage", "error", err)
+		return err
+	}
+	if password == "" {
+		return fmt.Errorf("Password not found. Run 'vty init' or 'vty recover'")
 	}
 
 	logger.Info("🔒 Encrypting...")
@@ -152,7 +162,7 @@ func runSyncSSH(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	remotePath := fmt.Sprintf("ssh/%s.json", name)
+	remotePath := fmt.Sprintf("ssh/%s.vty", name)
 	ctx := context.Background()
 
 	var sha string

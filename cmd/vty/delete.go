@@ -64,10 +64,10 @@ func runDelete(cmd *cobra.Command, args []string) error {
 
 	pathsToTry := []string{}
 	if deleteType == "" || deleteType == "env" {
-		pathsToTry = append(pathsToTry, fmt.Sprintf("envs/%s.json", name))
+		pathsToTry = append(pathsToTry, fmt.Sprintf("envs/%s.vty", name))
 	}
 	if deleteType == "" || deleteType == "ssh" {
-		pathsToTry = append(pathsToTry, fmt.Sprintf("ssh/%s.json", name))
+		pathsToTry = append(pathsToTry, fmt.Sprintf("ssh/%s.vty", name))
 	}
 
 	var foundPath string
@@ -121,5 +121,4 @@ func runDelete(cmd *cobra.Command, args []string) error {
 func init() {
 	deleteCmd.Flags().BoolVarP(&deleteForce, "force", "f", false, "Force delete without confirmation")
 	deleteCmd.Flags().StringVar(&deleteType, "type", "", "Secret type: env, ssh (auto-detect if not specified)")
-	rootCmd.AddCommand(deleteCmd)
 }

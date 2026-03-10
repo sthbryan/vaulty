@@ -39,6 +39,7 @@ func init() {
 		ReportTimestamp: false,
 		Level:           log.InfoLevel,
 	})
+	rootCmd.AddCommand(deleteCmd)
 }
 
 func main() {
