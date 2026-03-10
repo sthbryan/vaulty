@@ -21,12 +21,12 @@ import (
 )
 
 var (
-	syncForce bool
+	pushForce bool
 )
 
-var syncCmd = &cobra.Command{
-	Use:   "sync <name> <path>",
-	Short: "Sync an environment file to Vaulty",
+var pushCmd = &cobra.Command{
+	Use:   "push <name> <path>",
+	Short: "Push an environment file to Vaulty",
 	Long: `Compress, encrypt, and upload an environment file to your Vaulty repository.
 
 The file will be:
@@ -35,14 +35,14 @@ The file will be:
   3. Uploaded to your GitHub repository in the envs/ directory
 
 Examples:
-  vty sync production .env.production
-  vty sync staging .env.staging --force
-  vty sync api .env --password-stdin < password.txt`,
+  vty push production .env.production
+  vty push staging .env.staging --force
+  vty push api .env --password-stdin < password.txt`,
 	Args: cobra.ExactArgs(2),
-	RunE: runSync,
+	RunE: runPush,
 }
 
-func runSync(cmd *cobra.Command, args []string) error {
+func runPush(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	path := args[1]
 
@@ -70,6 +70,9 @@ func runSync(cmd *cobra.Command, args []string) error {
 	}
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("configuration error: %w", err)
+	}
+	if err := cfg.ValidateAndRefreshSession(); err != nil {
+		return fmt.Errorf("session validation failed: %w", err)
 	}
 
 	token, err := github.GetGitHubToken()
@@ -147,14 +150,14 @@ func runSync(cmd *cobra.Command, args []string) error {
 	existingContent, err := client.GetContent(ctx, owner, repoName, remotePath)
 	if err == nil && existingContent != nil {
 
-		if !syncForce {
+		if !pushForce {
 			ui.PrintWarning("File already exists on remote")
 			confirmed, confirmErr := ui.AskConfirm("Overwrite existing file?", false)
 			if confirmErr != nil {
 				return fmt.Errorf("confirmation failed: %w", confirmErr)
 			}
 			if !confirmed {
-				ui.PrintInfo("Sync cancelled")
+				ui.PrintInfo("Push cancelled")
 				return nil
 			}
 		}
@@ -165,9 +168,9 @@ func runSync(cmd *cobra.Command, args []string) error {
 	ui.PrintCloud("Uploading to GitHub...")
 
 	encodedContent := base64.StdEncoding.EncodeToString(vaultData)
-	commitMsg := fmt.Sprintf("Update %s via Vaulty sync", name)
+	commitMsg := fmt.Sprintf("Update %s via Vaulty push", name)
 	if existingSha == "" {
-		commitMsg = fmt.Sprintf("Add %s via Vaulty sync", name)
+		commitMsg = fmt.Sprintf("Add %s via Vaulty push", name)
 	}
 
 	req := github.ContentRequest{
@@ -180,7 +183,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to upload: %w", err)
 	}
 
-	ui.PrintSuccess("Synced successfully!")
+	ui.PrintSuccess("Pushed successfully!")
 	fmt.Println()
 	fmt.Printf("  Name:    %s\n", name)
 	fmt.Printf("  Path:    %s\n", remotePath)
@@ -193,6 +196,6 @@ func runSync(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	rootCmd.AddCommand(syncCmd)
-	syncCmd.Flags().BoolVarP(&syncForce, "force", "f", false, "Overwrite without prompting")
+	rootCmd.AddCommand(pushCmd)
+	pushCmd.Flags().BoolVarP(&pushForce, "force", "f", false, "Overwrite without prompting")
 }
