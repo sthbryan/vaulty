@@ -160,7 +160,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 	logger.Info("💾 Saved", "path", outputFile, "size", len(plaintext))
 	fmt.Println()
 	fmt.Println(ui.SuccessStyle.Render(fmt.Sprintf("✅ Pulled and decrypted: %s", outputFile)))
-	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("   Permissions: 0600 (owner read/write only)")))
+	fmt.Println(ui.MutedStyle.Render("   Permissions: 0600 (owner read/write only)"))
 
 	return nil
 }
