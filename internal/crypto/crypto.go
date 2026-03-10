@@ -398,6 +398,11 @@ func EncryptWithKey(plaintext, key []byte) (*EncryptedData, error) {
 		return nil, errors.New("key must be 32 bytes")
 	}
 
+	salt, err := GenerateSalt()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate salt: %w", err)
+	}
+
 	iv, err := GenerateIV()
 	if err != nil {
 		return nil, err
@@ -416,6 +421,7 @@ func EncryptWithKey(plaintext, key []byte) (*EncryptedData, error) {
 	ciphertext := aead.Seal(nil, iv, plaintext, nil)
 
 	return &EncryptedData{
+		Salt:       salt,
 		IV:         iv,
 		Ciphertext: ciphertext,
 	}, nil
