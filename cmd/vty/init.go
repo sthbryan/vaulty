@@ -196,9 +196,14 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		return fmt.Errorf("encrypting master key: %w", err)
 	}
 
-	passwordChallenge, err := crypto.GeneratePasswordChallenge(password1)
+	salt, challenge, err := crypto.GeneratePasswordChallengeStruct(password1)
 	if err != nil {
 		return fmt.Errorf("generating password challenge: %w", err)
+	}
+
+	passwordChallenge := &config.PasswordChallenge{
+		Salt:      salt,
+		Challenge: challenge,
 	}
 
 	masterKeyBytes := make([]byte, 0)
@@ -236,7 +241,7 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 	metadata := &config.Metadata{
 		Repo:    fmt.Sprintf("%s/%s", owner, repo),
 		Owner:   username,
-		Version: "2.0",
+		Version: "2.1",
 		Users: []config.UserEntry{
 			{
 				Username:          username,

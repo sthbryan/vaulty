@@ -117,63 +117,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	fmt.Println(ui.MutedStyle.Render("Downloading encrypted keys..."))
-	keyPath := fmt.Sprintf(".vaulty/keys/%s.enc", username)
-	keyResp, err := client.GetContent(ctx, owner, repo, keyPath)
-	if err != nil {
-		return fmt.Errorf("downloading user keys: %w", err)
-	}
-
-	keyData, err := client.DecodeContent(keyResp)
-	if err != nil {
-		return fmt.Errorf("decoding key data: %w", err)
-	}
-
-	fmt.Println(ui.MutedStyle.Render("Decrypting master key..."))
-	encryptedKey, err := crypto.DeserializeEncryptedData(keyData)
-	if err != nil {
-		return fmt.Errorf("deserializing encrypted key: %w", err)
-	}
-
-	masterKey, err := crypto.DecryptMasterKeyWithPassword(encryptedKey, masterPassword)
-	if err != nil {
-		fmt.Println()
-		fmt.Println(ui.ErrorStyle.Render("❌ Failed to decrypt master key"))
-		fmt.Println()
-		fmt.Println(ui.MutedStyle.Render("This could mean:"))
-		fmt.Println(ui.MutedStyle.Render("  • Wrong password"))
-		fmt.Println(ui.MutedStyle.Render("  • Wrong username"))
-		fmt.Println()
-		return fmt.Errorf("decryption failed")
-	}
-
-	fmt.Println(ui.MutedStyle.Render("Downloading vault..."))
-	vaultResp, err := client.GetContent(ctx, owner, repo, ".vaulty/vault.enc")
-	if err != nil {
-		return fmt.Errorf("downloading vault: %w", err)
-	}
-
-	vaultEncData, err := client.DecodeContent(vaultResp)
-	if err != nil {
-		return fmt.Errorf("decoding vault data: %w", err)
-	}
-
-	fmt.Println(ui.MutedStyle.Render("Decrypting vault..."))
-	encryptedVault, err := crypto.DeserializeEncryptedData(vaultEncData)
-	if err != nil {
-		return fmt.Errorf("deserializing encrypted vault: %w", err)
-	}
-
-	vaultData, err := crypto.DecryptVaultData(encryptedVault, masterKey)
-	if err != nil {
-		fmt.Println()
-		fmt.Println(ui.ErrorStyle.Render("❌ Failed to decrypt vault"))
-		fmt.Println()
-		return fmt.Errorf("vault decryption failed")
-	}
-
-	fmt.Println(ui.MutedStyle.Render("Validating user..."))
-
+	fmt.Println(ui.MutedStyle.Render("Validating credentials..."))
 	metadataResp, err := client.GetContent(ctx, owner, repo, ".vaulty/metadata.json")
 	if err != nil {
 		return fmt.Errorf("downloading metadata: %w", err)
@@ -204,13 +148,68 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("user %q not found in vault metadata", username)
 	}
 
-	if userEntry.PasswordChallenge != "" {
-		if !crypto.ValidatePasswordChallenge(masterPassword, userEntry.PasswordChallenge) {
+	if userEntry.PasswordChallenge != nil {
+		if !crypto.ValidatePasswordWithChallenge(masterPassword, userEntry.PasswordChallenge.Salt, userEntry.PasswordChallenge.Challenge) {
 			fmt.Println()
-			fmt.Println(ui.ErrorStyle.Render("❌ Invalid password"))
+			fmt.Println(ui.ErrorStyle.Render("❌ Incorrect password"))
 			fmt.Println()
 			return fmt.Errorf("password validation failed")
 		}
+	}
+
+	fmt.Println(ui.MutedStyle.Render("Downloading encrypted keys..."))
+	keyPath := fmt.Sprintf(".vaulty/keys/%s.enc", username)
+	keyResp, err := client.GetContent(ctx, owner, repo, keyPath)
+	if err != nil {
+		return fmt.Errorf("downloading user keys: %w", err)
+	}
+
+	keyData, err := client.DecodeContent(keyResp)
+	if err != nil {
+		return fmt.Errorf("decoding key data: %w", err)
+	}
+
+	fmt.Println(ui.MutedStyle.Render("Decrypting master key..."))
+	encryptedKey, err := crypto.DeserializeEncryptedData(keyData)
+	if err != nil {
+		return fmt.Errorf("deserializing encrypted key: %w", err)
+	}
+
+	masterKey, err := crypto.DecryptMasterKeyWithPassword(encryptedKey, masterPassword)
+	if err != nil {
+		fmt.Println()
+		fmt.Println(ui.ErrorStyle.Render("❌ Failed to decrypt master key"))
+		fmt.Println()
+		fmt.Println(ui.MutedStyle.Render("This could mean:"))
+		fmt.Println(ui.MutedStyle.Render("  • Vault data is corrupted"))
+		fmt.Println(ui.MutedStyle.Render("  • Try again"))
+		fmt.Println()
+		return fmt.Errorf("decryption failed")
+	}
+
+	fmt.Println(ui.MutedStyle.Render("Downloading vault..."))
+	vaultResp, err := client.GetContent(ctx, owner, repo, ".vaulty/vault.enc")
+	if err != nil {
+		return fmt.Errorf("downloading vault: %w", err)
+	}
+
+	vaultEncData, err := client.DecodeContent(vaultResp)
+	if err != nil {
+		return fmt.Errorf("decoding vault data: %w", err)
+	}
+
+	fmt.Println(ui.MutedStyle.Render("Decrypting vault..."))
+	encryptedVault, err := crypto.DeserializeEncryptedData(vaultEncData)
+	if err != nil {
+		return fmt.Errorf("deserializing encrypted vault: %w", err)
+	}
+
+	vaultData, err := crypto.DecryptVaultData(encryptedVault, masterKey)
+	if err != nil {
+		fmt.Println()
+		fmt.Println(ui.ErrorStyle.Render("❌ Failed to decrypt vault"))
+		fmt.Println()
+		return fmt.Errorf("vault decryption failed")
 	}
 
 	fmt.Println(ui.MutedStyle.Render("Creating session..."))

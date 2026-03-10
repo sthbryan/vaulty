@@ -119,10 +119,10 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if ownerEntry != nil && ownerEntry.PasswordChallenge != "" {
-		if !crypto.ValidatePasswordChallenge(verifyPassword, ownerEntry.PasswordChallenge) {
+	if ownerEntry != nil && ownerEntry.PasswordChallenge != nil {
+		if !crypto.ValidatePasswordWithChallenge(verifyPassword, ownerEntry.PasswordChallenge.Salt, ownerEntry.PasswordChallenge.Challenge) {
 			fmt.Println()
-			fmt.Println(ui.ErrorStyle.Render("❌ Invalid password"))
+			fmt.Println(ui.ErrorStyle.Render("❌ Incorrect password"))
 			fmt.Println()
 			return fmt.Errorf("password validation failed")
 		}

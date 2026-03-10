@@ -36,11 +36,16 @@ func (b *Base64Bytes) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+type PasswordChallenge struct {
+	Salt      Base64Bytes `json:"salt"`
+	Challenge Base64Bytes `json:"challenge"`
+}
+
 type UserEntry struct {
-	Username          string    `json:"username"`
-	Role              string    `json:"role"`
-	CreatedAt         time.Time `json:"created_at"`
-	PasswordChallenge string    `json:"password_challenge,omitempty"`
+	Username          string             `json:"username"`
+	Role              string             `json:"role"`
+	CreatedAt         time.Time          `json:"created_at"`
+	PasswordChallenge *PasswordChallenge `json:"password_challenge,omitempty"`
 }
 
 type Metadata struct {

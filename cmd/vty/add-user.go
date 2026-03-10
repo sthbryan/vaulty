@@ -103,10 +103,10 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("owner entry not found in metadata")
 	}
 
-	if ownerEntry.PasswordChallenge != "" {
-		if !crypto.ValidatePasswordChallenge(ownerPassword, ownerEntry.PasswordChallenge) {
+	if ownerEntry.PasswordChallenge != nil {
+		if !crypto.ValidatePasswordWithChallenge(ownerPassword, ownerEntry.PasswordChallenge.Salt, ownerEntry.PasswordChallenge.Challenge) {
 			fmt.Println()
-			fmt.Println(ui.ErrorStyle.Render("❌ Invalid password"))
+			fmt.Println(ui.ErrorStyle.Render("❌ Incorrect password"))
 			fmt.Println()
 			return fmt.Errorf("password validation failed")
 		}
@@ -196,9 +196,14 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("encrypting master key: %w", err)
 	}
 
-	newUserChallenge, err := crypto.GeneratePasswordChallenge(newPassword1)
+	salt, challenge, err := crypto.GeneratePasswordChallengeStruct(newPassword1)
 	if err != nil {
 		return fmt.Errorf("generating password challenge: %w", err)
+	}
+
+	newUserChallenge := &config.PasswordChallenge{
+		Salt:      salt,
+		Challenge: challenge,
 	}
 
 	masterKeyBytes := crypto.SerializeEncryptedData(encryptedMasterKey)
