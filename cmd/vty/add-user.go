@@ -212,8 +212,17 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("uploading key: %w", err)
 	}
 
-	// Upload recovery seed (plaintext)
-	recoveryContent := base64.StdEncoding.EncodeToString([]byte(recoverySeeds))
+	encryptedSeed, err := crypto.EncryptRecoverySeed(recoverySeeds, newPassword1)
+	if err != nil {
+		return fmt.Errorf("encrypting recovery seed: %w", err)
+	}
+
+	encryptedSeedJSON, err := json.Marshal(encryptedSeed)
+	if err != nil {
+		return fmt.Errorf("marshaling encrypted seed: %w", err)
+	}
+
+	recoveryContent := base64.StdEncoding.EncodeToString(encryptedSeedJSON)
 	err = client.PutRecoverySeed(ctx, owner, repo, username, []byte(recoveryContent))
 	if err != nil {
 		return fmt.Errorf("uploading recovery seed: %w", err)

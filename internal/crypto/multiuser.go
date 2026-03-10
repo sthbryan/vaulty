@@ -66,3 +66,15 @@ func DecryptVaultData(data *EncryptedData, masterKey []byte) ([]byte, error) {
 
 	return DecryptWithKey(data, masterKey)
 }
+
+func EncryptRecoverySeed(seed string, password string) (*EncryptedData, error) {
+	return Encrypt([]byte(seed), password)
+}
+
+func DecryptRecoverySeed(data *EncryptedData, password string) (string, error) {
+	seedBytes, err := Decrypt(data, password)
+	if err != nil {
+		return "", err
+	}
+	return string(seedBytes), nil
+}

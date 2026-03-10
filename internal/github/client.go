@@ -287,12 +287,12 @@ func (c *Client) PutMetadata(ctx context.Context, owner, repo string, metadata [
 }
 
 func (c *Client) GetRecoverySeed(ctx context.Context, owner, repo, username string) (*ContentResponse, error) {
-	path := fmt.Sprintf(".vaulty/recovery/%s.recovery", username)
+	path := fmt.Sprintf(".vaulty/recovery/%s.recovery.enc", username)
 	return c.GetContent(ctx, owner, repo, path)
 }
 
 func (c *Client) PutRecoverySeed(ctx context.Context, owner, repo, username string, data []byte) error {
-	path := fmt.Sprintf(".vaulty/recovery/%s.recovery", username)
+	path := fmt.Sprintf(".vaulty/recovery/%s.recovery.enc", username)
 	sha, err := c.getContentSha(ctx, owner, repo, path)
 	if err != nil && !strings.Contains(err.Error(), "404") {
 		return fmt.Errorf("failed to get current sha: %w", err)

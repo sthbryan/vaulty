@@ -317,8 +317,18 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		return fmt.Errorf("generating recovery seed: %w", err)
 	}
 
-	recoveryContent := base64.StdEncoding.EncodeToString([]byte(seedPhrase))
-	err = client.PutContent(ctx, owner, repo, ".vaulty/recovery/ana.recovery", github.ContentRequest{
+	encryptedSeed, err := crypto.EncryptRecoverySeed(seedPhrase, password1)
+	if err != nil {
+		return fmt.Errorf("encrypting recovery seed: %w", err)
+	}
+
+	encryptedSeedJSON, err := json.Marshal(encryptedSeed)
+	if err != nil {
+		return fmt.Errorf("marshaling encrypted seed: %w", err)
+	}
+
+	recoveryContent := base64.StdEncoding.EncodeToString(encryptedSeedJSON)
+	err = client.PutContent(ctx, owner, repo, ".vaulty/recovery/"+username+".recovery.enc", github.ContentRequest{
 		Message: "Add recovery seed",
 		Content: recoveryContent,
 	})
