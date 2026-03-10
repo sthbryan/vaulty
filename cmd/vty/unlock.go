@@ -242,7 +242,3 @@ func runUnlock(cmd *cobra.Command, args []string) error {
 func deleteConfigFile(path string) error {
 	return nil // Placeholder - could be implemented if needed
 }
-
-func init() {
-	rootCmd.AddCommand(unlockCmd)
-}
