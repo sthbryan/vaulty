@@ -1,4 +1,4 @@
-module github.com/sthbryan/vaulty
+module github.com/DeadBryam/vaulty
 
 go 1.26.1
 

@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/DeadBryam/vaulty/internal/config"
+	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
-	"github.com/sthbryan/vaulty/internal/config"
-	"github.com/sthbryan/vaulty/internal/ui"
 )
 
 var unlinkForce bool
 
 var unlinkCmd = &cobra.Command{
 	Use:   "unlink",
-	Short: "⚠️  Unlink Vaulty from the current repository",
+	Short: "Unlink Vaulty from the current repository",
 	Long: `Unlink Vaulty by removing the local configuration file.
 
 ⚠️  WARNING: This will delete your local configuration at ~/.vty/config.json.

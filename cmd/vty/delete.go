@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/sthbryan/vaulty/internal/config"
-	"github.com/sthbryan/vaulty/internal/github"
-	"github.com/sthbryan/vaulty/internal/ui"
+	"github.com/DeadBryam/vaulty/internal/config"
+	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/ui"
 )
 
 var (

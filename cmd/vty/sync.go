@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DeadBryam/vaulty/internal/compress"
+	"github.com/DeadBryam/vaulty/internal/config"
+	"github.com/DeadBryam/vaulty/internal/crypto"
+	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/password"
+	"github.com/DeadBryam/vaulty/internal/ui"
+	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/spf13/cobra"
-	"github.com/sthbryan/vaulty/internal/compress"
-	"github.com/sthbryan/vaulty/internal/config"
-	"github.com/sthbryan/vaulty/internal/crypto"
-	"github.com/sthbryan/vaulty/internal/github"
-	"github.com/sthbryan/vaulty/internal/password"
-	"github.com/sthbryan/vaulty/internal/ui"
-	"github.com/sthbryan/vaulty/pkg/models"
 )
 
 var (
@@ -26,7 +26,7 @@ var (
 
 var syncCmd = &cobra.Command{
 	Use:   "sync <name> <path>",
-	Short: "📦 Sync an environment file to Vaulty",
+	Short: "Sync an environment file to Vaulty",
 	Long: `Compress, encrypt, and upload an environment file to your Vaulty repository.
 
 The file will be:

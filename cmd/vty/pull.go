@@ -8,16 +8,16 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/DeadBryam/vaulty/internal/compress"
+	"github.com/DeadBryam/vaulty/internal/config"
+	"github.com/DeadBryam/vaulty/internal/crypto"
+	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/password"
+	"github.com/DeadBryam/vaulty/internal/ui"
+	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
-	"github.com/sthbryan/vaulty/internal/compress"
-	"github.com/sthbryan/vaulty/internal/config"
-	"github.com/sthbryan/vaulty/internal/crypto"
-	"github.com/sthbryan/vaulty/internal/github"
-	"github.com/sthbryan/vaulty/internal/password"
-	"github.com/sthbryan/vaulty/internal/ui"
-	"github.com/sthbryan/vaulty/pkg/models"
 )
 
 var (
@@ -27,7 +27,7 @@ var (
 
 var pullCmd = &cobra.Command{
 	Use:   "pull <name>",
-	Short: "☁️  Pull and decrypt secrets from GitHub",
+	Short: "Pull and decrypt secrets from GitHub",
 	Long: `Pull encrypted secrets from your GitHub repository.
 
 This command will:

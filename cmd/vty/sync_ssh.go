@@ -11,19 +11,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DeadBryam/vaulty/internal/compress"
+	"github.com/DeadBryam/vaulty/internal/config"
+	"github.com/DeadBryam/vaulty/internal/crypto"
+	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/password"
+	"github.com/DeadBryam/vaulty/internal/ui"
+	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/spf13/cobra"
-	"github.com/sthbryan/vaulty/internal/compress"
-	"github.com/sthbryan/vaulty/internal/config"
-	"github.com/sthbryan/vaulty/internal/crypto"
-	"github.com/sthbryan/vaulty/internal/github"
-	"github.com/sthbryan/vaulty/internal/password"
-	"github.com/sthbryan/vaulty/internal/ui"
-	"github.com/sthbryan/vaulty/pkg/models"
 )
 
 var syncSSHCmd = &cobra.Command{
 	Use:   "sync-ssh <name> <key_path>",
-	Short: "🔐 Sync an SSH private key to your vault",
+	Short: "Sync an SSH private key to your vault",
 	Long: `Sync an SSH private key to your vault.
 
 This command will:

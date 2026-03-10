@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DeadBryam/vaulty/internal/config"
+	"github.com/DeadBryam/vaulty/internal/crypto"
+	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/password"
+	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
-	"github.com/sthbryan/vaulty/internal/config"
-	"github.com/sthbryan/vaulty/internal/crypto"
-	"github.com/sthbryan/vaulty/internal/github"
-	"github.com/sthbryan/vaulty/internal/password"
-	"github.com/sthbryan/vaulty/internal/ui"
 )
 
 var recoverCmd = &cobra.Command{

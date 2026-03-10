@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 
+	"github.com/DeadBryam/vaulty/internal/password"
+	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
-	"github.com/sthbryan/vaulty/internal/password"
-	"github.com/sthbryan/vaulty/internal/ui"
 )
 
 var logoutForce bool

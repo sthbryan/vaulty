@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DeadBryam/vaulty/internal/config"
+	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/ui"
+	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 	"github.com/spf13/cobra"
-	"github.com/sthbryan/vaulty/internal/config"
-	"github.com/sthbryan/vaulty/internal/github"
-	"github.com/sthbryan/vaulty/internal/ui"
-	"github.com/sthbryan/vaulty/pkg/models"
 )
 
 var (
@@ -22,7 +22,7 @@ var (
 
 var listCmd = &cobra.Command{
 	Use:   "list",
-	Short: "📊 List all secrets in the vault",
+	Short: "List all secrets in the vault",
 	Long: `List all secrets stored in your Vaulty repository.
 
 This command retrieves and displays all environment files and SSH keys

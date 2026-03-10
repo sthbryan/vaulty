@@ -3,7 +3,7 @@ package models
 import (
 	"time"
 
-	"github.com/sthbryan/vaulty/internal/crypto"
+	"github.com/DeadBryam/vaulty/internal/crypto"
 )
 
 type SecretType string
