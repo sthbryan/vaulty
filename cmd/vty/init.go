@@ -206,7 +206,7 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 	masterKeyBytes = append(masterKeyBytes, encryptedMasterKey.Ciphertext...)
 
 	masterKeyContent := base64.StdEncoding.EncodeToString(masterKeyBytes)
-	err = client.PutContent(ctx, owner, repo, ".vaulty/keys/ana.enc", github.ContentRequest{
+	err = client.PutContent(ctx, owner, repo, fmt.Sprintf(".vaulty/keys/%s.enc", username), github.ContentRequest{
 		Message: "Add encrypted master key",
 		Content: masterKeyContent,
 	})
