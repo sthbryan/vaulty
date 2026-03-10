@@ -189,6 +189,20 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		return fmt.Errorf("generating recovery seed: %w", err)
 	}
 
+	recoveryData, err := crypto.EncryptPasswordWithSeed(password1, seedPhrase)
+	if err != nil {
+		return fmt.Errorf("creating recovery data: %w", err)
+	}
+
+	recoveryContent := base64.StdEncoding.EncodeToString(recoveryData)
+	err = client.PutContent(ctx, owner, repo, ".vaulty/recovery.vty", github.ContentRequest{
+		Message: "Add recovery data",
+		Content: recoveryContent,
+	})
+	if err != nil {
+		return fmt.Errorf("uploading recovery data: %w", err)
+	}
+
 	if err := passStorage.Set(password1); err != nil {
 		return fmt.Errorf("storing password: %w", err)
 	}
@@ -239,7 +253,11 @@ func linkExistingRepo(ctx context.Context, client *github.Client, owner, repo st
 
 	if err := crypto.ValidateCanary(canaryData, password, deviceSalt); err != nil {
 		fmt.Println()
-		fmt.Println(ui.ErrorStyle.Render("❌ Wrong password. Use 'vty recover' if forgotten."))
+		fmt.Println(ui.ErrorStyle.Render("❌ Wrong password"))
+		fmt.Println()
+		fmt.Println(ui.InfoStyle.Render("If you forgot your password:"))
+		fmt.Println(ui.MutedStyle.Render("  vty recover --seed \"your 12-word seed phrase\""))
+		fmt.Println()
 		return fmt.Errorf("invalid password")
 	}
 

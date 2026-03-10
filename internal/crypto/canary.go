@@ -53,3 +53,31 @@ func ValidateRecoverySeed(seed string) ([]byte, error) {
 	}
 	return bip39.EntropyFromMnemonic(seed)
 }
+
+func EncryptPasswordWithSeed(password, seed string) ([]byte, error) {
+	entropy, err := bip39.EntropyFromMnemonic(seed)
+	if err != nil {
+		return nil, err
+	}
+	encrypted, err := Encrypt([]byte(password), string(entropy))
+	if err != nil {
+		return nil, err
+	}
+	return SerializeEncryptedData(encrypted), nil
+}
+
+func DecryptPasswordWithSeed(data []byte, seed string) (string, error) {
+	entropy, err := bip39.EntropyFromMnemonic(seed)
+	if err != nil {
+		return "", err
+	}
+	encrypted, err := DeserializeEncryptedData(data)
+	if err != nil {
+		return "", err
+	}
+	plaintext, err := Decrypt(encrypted, string(entropy))
+	if err != nil {
+		return "", err
+	}
+	return string(plaintext), nil
+}

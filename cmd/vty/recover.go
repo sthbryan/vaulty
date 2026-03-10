@@ -65,16 +65,6 @@ func runRecover(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	canaryResp, err := client.GetContent(ctx, owner, repo, ".vaulty/canary.vty")
-	if err != nil {
-		return fmt.Errorf("fetching canary: %w", err)
-	}
-
-	canaryData, err := client.DecodeContent(canaryResp)
-	if err != nil {
-		return fmt.Errorf("decoding canary: %w", err)
-	}
-
 	fmt.Println(ui.InfoStyle.Render("🔐 Set a new master password"))
 	fmt.Println()
 
@@ -118,14 +108,33 @@ func runRecover(cmd *cobra.Command, args []string) error {
 	}
 	cfg.DeviceSalt = deviceSalt
 
-	encrypted, err := crypto.DeserializeEncryptedData(canaryData)
+	recoveryResp, err := client.GetContent(ctx, owner, repo, ".vaulty/recovery.vty")
 	if err != nil {
-		return fmt.Errorf("Recovery failed: seed does not match this vault")
+		return fmt.Errorf("fetching recovery data: %w", err)
 	}
 
-	_, err = crypto.Decrypt(encrypted, password1+string(deviceSalt))
+	recoveryData, err := client.DecodeContent(recoveryResp)
 	if err != nil {
-		return fmt.Errorf("Recovery failed: seed does not match this vault")
+		return fmt.Errorf("decoding recovery data: %w", err)
+	}
+
+	originalPassword, err := crypto.DecryptPasswordWithSeed(recoveryData, recoverSeed)
+	if err != nil {
+		return fmt.Errorf("invalid seed phrase")
+	}
+
+	canaryResp, err := client.GetContent(ctx, owner, repo, ".vaulty/canary.vty")
+	if err != nil {
+		return fmt.Errorf("fetching canary: %w", err)
+	}
+
+	canaryData, err := client.DecodeContent(canaryResp)
+	if err != nil {
+		return fmt.Errorf("decoding canary: %w", err)
+	}
+
+	if err := crypto.ValidateCanary(canaryData, originalPassword, deviceSalt); err != nil {
+		return fmt.Errorf("invalid seed phrase")
 	}
 
 	newCanary, err := crypto.GenerateCanary(password1, deviceSalt)
