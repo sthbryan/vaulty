@@ -20,7 +20,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// BinaryVaultFile represents the structure stored in binary .vty files
 type BinaryVaultFile struct {
 	Metadata models.SecretMetadata `json:"metadata"`
 	Data     []byte                `json:"data"`

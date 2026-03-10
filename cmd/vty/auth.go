@@ -63,7 +63,7 @@ func authenticateUser(cfg *config.Config, password string) (*session.Session, er
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	metadataResp, err := client.GetContent(ctx, owner, repo, ".vaulty/metadata.json")
+	metadataResp, err := client.GetContent(ctx, owner, repo, ".vaulty/metadata.vty")
 	if err != nil {
 		return nil, fmt.Errorf("downloading metadata: %w", err)
 	}

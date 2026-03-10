@@ -83,21 +83,27 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	var secrets []models.SecretInfo
 	var sshKeys []github.SSHKeyInfo
 
-	// Fetch and decrypt vault.vty to get metadata
-	logger.Info("🔓 Decrypting vault...")
-	vaultContent, err := fetchAndDecryptVtyFile(ctx, client, owner, repo, ".vaulty/vault.vty", sess.MasterKey)
+	logger.Info("🔓 Loading vault...")
+	vaultResp, err := client.GetContent(ctx, owner, repo, ".vaulty/vault.vty")
 	if err != nil {
-		logger.Warn("Could not decrypt vault", "error", err)
-	}
-
-	var vaultData map[string]interface{}
-	if vaultContent != nil {
-		if err := json.Unmarshal(vaultContent, &vaultData); err != nil {
-			logger.Warn("Could not parse vault data", "error", err)
+		logger.Warn("Could not fetch vault", "error", err)
+	} else {
+		vaultData, err := client.DecodeContent(vaultResp)
+		if err != nil {
+			logger.Warn("Could not decode vault", "error", err)
+		} else {
+			vaultJSON, err := crypto.DecompressHex(string(vaultData))
+			if err != nil {
+				logger.Warn("Could not decompress vault", "error", err)
+			} else {
+				encryptedVault := &crypto.EncryptedData{}
+				if err := json.Unmarshal(vaultJSON, encryptedVault); err != nil {
+					logger.Warn("Could not parse vault JSON", "error", err)
+				}
+			}
 		}
 	}
 
-	// Fetch and decrypt environment secrets
 	envItems, err := client.ListDirectory(ctx, owner, repo, "envs")
 	if err == nil {
 		for _, item := range envItems {
@@ -105,7 +111,6 @@ func runInfo(cmd *cobra.Command, args []string) error {
 				name := strings.TrimSuffix(item.Name, ".vty")
 				path := fmt.Sprintf("envs/%s", item.Name)
 
-				// Fetch and decrypt to get actual size
 				decryptedContent, decryptErr := fetchAndDecryptVtyFile(ctx, client, owner, repo, path, sess.MasterKey)
 				var size int64
 				if decryptErr == nil {
@@ -133,7 +138,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	}
 	if err == nil {
 		for _, key := range sshKeys {
-			// Fetch and decrypt SSH key to get actual size
+
 			path := fmt.Sprintf("ssh/%s/%s.vty", key.Username, key.KeyName)
 			decryptedContent, decryptErr := fetchAndDecryptVtyFile(ctx, client, owner, repo, path, sess.MasterKey)
 

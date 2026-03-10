@@ -89,7 +89,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	_, err = client.GetContent(ctx, owner, repo, ".vaulty/metadata.json")
+	_, err = client.GetContent(ctx, owner, repo, ".vaulty/metadata.vty")
 	if err == nil {
 		return fmt.Errorf("vault already exists at %s - use 'vty link' to connect to an existing vault", repoFull)
 	}
@@ -212,12 +212,12 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		return fmt.Errorf("marshaling master key: %w", err)
 	}
 
-	encryptedMasterKeyHex, err := crypto.EncryptBinary(masterKeyJSON, masterKey)
+	masterKeyHex, err := crypto.CompressHex(masterKeyJSON)
 	if err != nil {
-		return fmt.Errorf("encrypting master key binary: %w", err)
+		return fmt.Errorf("compressing master key: %w", err)
 	}
 
-	err = client.PutUserKeys(ctx, owner, repo, username, []byte(encryptedMasterKeyHex))
+	err = client.PutUserKeys(ctx, owner, repo, username, []byte(masterKeyHex))
 	if err != nil {
 		return fmt.Errorf("uploading master key: %w", err)
 	}
@@ -232,12 +232,12 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		return fmt.Errorf("marshaling vault: %w", err)
 	}
 
-	encryptedVaultHex, err := crypto.EncryptBinary(vaultJSON, masterKey)
+	vaultHex, err := crypto.CompressHex(vaultJSON)
 	if err != nil {
-		return fmt.Errorf("encrypting vault binary: %w", err)
+		return fmt.Errorf("compressing vault: %w", err)
 	}
 
-	err = client.PutVault(ctx, owner, repo, []byte(encryptedVaultHex))
+	err = client.PutVault(ctx, owner, repo, []byte(vaultHex))
 	if err != nil {
 		return fmt.Errorf("uploading vault: %w", err)
 	}
@@ -262,7 +262,7 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 	}
 
 	metadataContent := base64.StdEncoding.EncodeToString(metadataJSON)
-	err = client.PutContent(ctx, owner, repo, ".vaulty/metadata.json", github.ContentRequest{
+	err = client.PutContent(ctx, owner, repo, ".vaulty/metadata.vty", github.ContentRequest{
 		Message: "Add metadata",
 		Content: metadataContent,
 	})
@@ -285,12 +285,12 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		return fmt.Errorf("marshaling encrypted seed: %w", err)
 	}
 
-	encryptedRecoveryHex, err := crypto.EncryptBinary(encryptedSeedJSON, masterKey)
+	recoveryHex, err := crypto.CompressHex(encryptedSeedJSON)
 	if err != nil {
-		return fmt.Errorf("encrypting recovery binary: %w", err)
+		return fmt.Errorf("compressing recovery: %w", err)
 	}
 
-	recoveryContent := base64.StdEncoding.EncodeToString([]byte(encryptedRecoveryHex))
+	recoveryContent := base64.StdEncoding.EncodeToString([]byte(recoveryHex))
 	err = client.PutContent(ctx, owner, repo, ".vaulty/recovery/"+username+".recovery.vty", github.ContentRequest{
 		Message: "Add recovery seed",
 		Content: recoveryContent,

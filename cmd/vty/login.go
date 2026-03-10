@@ -170,8 +170,16 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println(ui.MutedStyle.Render("Decrypting master key..."))
+	keyJSON, err := crypto.DecompressHex(string(keyData))
+	if err != nil {
+		fmt.Println()
+		fmt.Println(ui.ErrorStyle.Render("❌ Failed to decompress master key"))
+		fmt.Println()
+		return fmt.Errorf("decompression failed: %w", err)
+	}
+
 	encryptedKey := &crypto.EncryptedData{}
-	if err := json.Unmarshal(keyData, encryptedKey); err != nil {
+	if err := json.Unmarshal(keyJSON, encryptedKey); err != nil {
 		return fmt.Errorf("parsing master key JSON: %w", err)
 	}
 
@@ -199,8 +207,16 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println(ui.MutedStyle.Render("Decrypting vault..."))
+	vaultJSON, err := crypto.DecompressHex(string(vaultEncData))
+	if err != nil {
+		fmt.Println()
+		fmt.Println(ui.ErrorStyle.Render("❌ Failed to decompress vault"))
+		fmt.Println()
+		return fmt.Errorf("vault decompression failed: %w", err)
+	}
+
 	encryptedVault := &crypto.EncryptedData{}
-	if err := json.Unmarshal(vaultEncData, encryptedVault); err != nil {
+	if err := json.Unmarshal(vaultJSON, encryptedVault); err != nil {
 		return fmt.Errorf("parsing vault JSON: %w", err)
 	}
 
