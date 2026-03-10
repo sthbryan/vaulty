@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/crypto"
@@ -222,6 +223,11 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to marshal encrypted key: %w", err)
 	}
 
+	ownerKeyHex, err := crypto.EncryptBinary(ownerKeyJSON, newMasterKey)
+	if err != nil {
+		return fmt.Errorf("failed to binary encrypt owner key: %w", err)
+	}
+
 	fmt.Println()
 	ui.PrintInfo("Uploading changes to GitHub...")
 
@@ -240,14 +246,14 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to upload metadata: %w", err)
 	}
 
-	err = client.PutUserKeys(ctx, owner, repoName, cfg.CurrentUser, ownerKeyJSON)
+	err = client.PutUserKeys(ctx, owner, repoName, cfg.CurrentUser, []byte(ownerKeyHex))
 	if err != nil {
 		return fmt.Errorf("failed to upload owner key: %w", err)
 	}
 
 	ui.PrintInfo("Deleting removed user's key file...")
 
-	removedUserKeyPath := fmt.Sprintf(".vaulty/keys/%s.enc", username)
+	removedUserKeyPath := fmt.Sprintf(".vaulty/keys/%s.vty", username)
 	removedUserKeyResp, err := client.GetContent(ctx, owner, repoName, removedUserKeyPath)
 	if err == nil && removedUserKeyResp != nil {
 		err = client.DeleteContent(ctx, owner, repoName, removedUserKeyPath, removedUserKeyResp.Sha)
@@ -256,11 +262,24 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	ui.PrintInfo("Deleting removed user's recovery file...")
+	recoveryPath := fmt.Sprintf(".vaulty/recovery/%s.recovery.vty", username)
+	recoveryResp, err := client.GetContent(ctx, owner, repoName, recoveryPath)
+	if err == nil && recoveryResp != nil {
+		err = client.DeleteContent(ctx, owner, repoName, recoveryPath, recoveryResp.Sha)
+		if err != nil {
+			logger.Warn("failed to delete recovery file", "path", recoveryPath, "error", err)
+		}
+	}
+
 	ui.PrintInfo("Deleting removed user's SSH keys...")
 	sshDirPath := fmt.Sprintf("ssh/%s", username)
 	sshItems, err := client.ListDirectory(ctx, owner, repoName, sshDirPath)
 	if err == nil {
 		for _, item := range sshItems {
+			if !strings.HasSuffix(item.Name, ".vty") {
+				continue
+			}
 			itemPath := fmt.Sprintf("%s/%s", sshDirPath, item.Name)
 			itemResp, err := client.GetContent(ctx, owner, repoName, itemPath)
 			if err == nil && itemResp != nil {

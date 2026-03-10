@@ -2,19 +2,16 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/DeadBryam/vaulty/internal/compress"
 	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/session"
 	"github.com/DeadBryam/vaulty/internal/ui"
-	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
@@ -158,24 +155,14 @@ func pullSecretWithSession(name, secretType, targetUser string, sess *session.Se
 		return fmt.Errorf("decoding content: %w", err)
 	}
 
-	var vaultFile models.VaultFile
-	if err := json.Unmarshal(encodedData, &vaultFile); err != nil {
-		return fmt.Errorf("unmarshaling vault file: %w", err)
-	}
-
 	logger.Info("🔓 Decrypting...")
-	compressedData, err := crypto.Decrypt(&vaultFile.Data, string(sess.MasterKey))
+	hexData := string(encodedData)
+	plaintext, err := crypto.DecryptBinary(hexData, sess.MasterKey)
 	if err != nil {
 		if err == crypto.ErrDecryptionFailed {
 			return fmt.Errorf("decryption failed: invalid password")
 		}
 		return fmt.Errorf("decrypting: %w", err)
-	}
-
-	logger.Info("🗜️  Decompressing...")
-	plaintext, err := compress.Decompress(compressedData)
-	if err != nil {
-		return fmt.Errorf("decompressing: %w", err)
 	}
 
 	outputFile, err := getOutputFilename(name, secretType)

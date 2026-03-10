@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/DeadBryam/vaulty/internal/config"
+	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/session"
 	"github.com/DeadBryam/vaulty/internal/ui"
@@ -25,6 +27,29 @@ var infoCmd = &cobra.Command{
 Shows name, type, size, and when each secret was last updated.
 Requires an active session (use 'vty login' first).`,
 	RunE: runInfo,
+}
+
+func fetchAndDecryptVtyFile(ctx context.Context, client *github.Client, owner, repo, path string, masterKey []byte) ([]byte, error) {
+	content, err := client.GetContent(ctx, owner, repo, path)
+	if err != nil {
+		return nil, fmt.Errorf("fetching content: %w", err)
+	}
+
+	encodedData, err := client.DecodeContent(content)
+	if err != nil {
+		return nil, fmt.Errorf("decoding content: %w", err)
+	}
+
+	hexData := string(encodedData)
+	plaintext, err := crypto.DecryptBinary(hexData, masterKey)
+	if err != nil {
+		if err == crypto.ErrDecryptionFailed {
+			return nil, fmt.Errorf("decryption failed: invalid password")
+		}
+		return nil, fmt.Errorf("decrypting: %w", err)
+	}
+
+	return plaintext, nil
 }
 
 func runInfo(cmd *cobra.Command, args []string) error {
@@ -58,17 +83,44 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	var secrets []models.SecretInfo
 	var sshKeys []github.SSHKeyInfo
 
+	// Fetch and decrypt vault.vty to get metadata
+	logger.Info("🔓 Decrypting vault...")
+	vaultContent, err := fetchAndDecryptVtyFile(ctx, client, owner, repo, ".vaulty/vault.vty", sess.MasterKey)
+	if err != nil {
+		logger.Warn("Could not decrypt vault", "error", err)
+	}
+
+	var vaultData map[string]interface{}
+	if vaultContent != nil {
+		if err := json.Unmarshal(vaultContent, &vaultData); err != nil {
+			logger.Warn("Could not parse vault data", "error", err)
+		}
+	}
+
+	// Fetch and decrypt environment secrets
 	envItems, err := client.ListDirectory(ctx, owner, repo, "envs")
 	if err == nil {
 		for _, item := range envItems {
 			if strings.HasSuffix(item.Name, ".vty") {
 				name := strings.TrimSuffix(item.Name, ".vty")
+				path := fmt.Sprintf("envs/%s", item.Name)
+
+				// Fetch and decrypt to get actual size
+				decryptedContent, decryptErr := fetchAndDecryptVtyFile(ctx, client, owner, repo, path, sess.MasterKey)
+				var size int64
+				if decryptErr == nil {
+					size = int64(len(decryptedContent))
+				} else {
+					size = int64(item.Size)
+					logger.Debug("Could not decrypt env file", "name", name, "error", decryptErr)
+				}
+
 				secrets = append(secrets, models.SecretInfo{
 					Name:      name,
 					Type:      models.SecretTypeEnv,
 					CreatedAt: time.Time{},
 					UpdatedAt: time.Time{},
-					Size:      int64(item.Size),
+					Size:      size,
 				})
 			}
 		}
@@ -81,12 +133,24 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	}
 	if err == nil {
 		for _, key := range sshKeys {
+			// Fetch and decrypt SSH key to get actual size
+			path := fmt.Sprintf("ssh/%s/%s.vty", key.Username, key.KeyName)
+			decryptedContent, decryptErr := fetchAndDecryptVtyFile(ctx, client, owner, repo, path, sess.MasterKey)
+
+			var size int64
+			if decryptErr == nil {
+				size = int64(len(decryptedContent))
+			} else {
+				size = int64(key.Size)
+				logger.Debug("Could not decrypt SSH key", "name", key.KeyName, "error", decryptErr)
+			}
+
 			secrets = append(secrets, models.SecretInfo{
 				Name:      key.KeyName,
 				Type:      models.SecretTypeSSH,
 				CreatedAt: time.Time{},
 				UpdatedAt: time.Time{},
-				Size:      int64(key.Size),
+				Size:      size,
 			})
 		}
 	}

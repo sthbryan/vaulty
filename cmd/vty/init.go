@@ -212,7 +212,12 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		return fmt.Errorf("marshaling master key: %w", err)
 	}
 
-	err = client.PutUserKeys(ctx, owner, repo, username, masterKeyJSON)
+	encryptedMasterKeyHex, err := crypto.EncryptBinary(masterKeyJSON, masterKey)
+	if err != nil {
+		return fmt.Errorf("encrypting master key binary: %w", err)
+	}
+
+	err = client.PutUserKeys(ctx, owner, repo, username, []byte(encryptedMasterKeyHex))
 	if err != nil {
 		return fmt.Errorf("uploading master key: %w", err)
 	}
@@ -227,7 +232,12 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		return fmt.Errorf("marshaling vault: %w", err)
 	}
 
-	err = client.PutVault(ctx, owner, repo, vaultJSON)
+	encryptedVaultHex, err := crypto.EncryptBinary(vaultJSON, masterKey)
+	if err != nil {
+		return fmt.Errorf("encrypting vault binary: %w", err)
+	}
+
+	err = client.PutVault(ctx, owner, repo, []byte(encryptedVaultHex))
 	if err != nil {
 		return fmt.Errorf("uploading vault: %w", err)
 	}
@@ -275,8 +285,13 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		return fmt.Errorf("marshaling encrypted seed: %w", err)
 	}
 
-	recoveryContent := base64.StdEncoding.EncodeToString(encryptedSeedJSON)
-	err = client.PutContent(ctx, owner, repo, ".vaulty/recovery/"+username+".recovery.enc", github.ContentRequest{
+	encryptedRecoveryHex, err := crypto.EncryptBinary(encryptedSeedJSON, masterKey)
+	if err != nil {
+		return fmt.Errorf("encrypting recovery binary: %w", err)
+	}
+
+	recoveryContent := base64.StdEncoding.EncodeToString([]byte(encryptedRecoveryHex))
+	err = client.PutContent(ctx, owner, repo, ".vaulty/recovery/"+username+".recovery.vty", github.ContentRequest{
 		Message: "Add recovery seed",
 		Content: recoveryContent,
 	})

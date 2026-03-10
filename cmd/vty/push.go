@@ -20,6 +20,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// BinaryVaultFile represents the structure stored in binary .vty files
+type BinaryVaultFile struct {
+	Metadata models.SecretMetadata `json:"metadata"`
+	Data     []byte                `json:"data"`
+}
+
 var (
 	pushForce bool
 )
@@ -119,7 +125,7 @@ func loadConfigAndClient() (*config.Config, *github.Client, error) {
 	return cfg, client, nil
 }
 
-func encryptAndPrepareFileWithSession(path, name string, secretType models.SecretType, sess *session.Session) (*models.VaultFile, int64, error) {
+func encryptAndPrepareFileWithSession(path, name string, secretType models.SecretType, sess *session.Session) (*BinaryVaultFile, int64, error) {
 	ui.PrintInfo("Reading file: %s", path)
 
 	content, err := os.ReadFile(path)
@@ -144,13 +150,7 @@ func encryptAndPrepareFileWithSession(path, name string, secretType models.Secre
 		ui.FormatBytes(compressedSize),
 		float64(originalSize-compressedSize)/float64(originalSize)*100)
 
-	ui.PrintLock("Encrypting...")
-	encrypted, err := crypto.Encrypt(compressed, string(sess.MasterKey))
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to encrypt: %w", err)
-	}
-
-	vaultFile := models.VaultFile{
+	vaultFile := &BinaryVaultFile{
 		Metadata: models.SecretMetadata{
 			Name:      name,
 			Type:      secretType,
@@ -159,10 +159,30 @@ func encryptAndPrepareFileWithSession(path, name string, secretType models.Secre
 			Size:      originalSize,
 			Checksum:  checksum,
 		},
-		Data: *encrypted,
+		Data: compressed,
 	}
 
-	return &vaultFile, originalSize, nil
+	return vaultFile, originalSize, nil
+}
+
+func encryptAndUploadBinary(client *github.Client, cfg *config.Config, remotePath string, vaultFile *BinaryVaultFile, masterKey []byte, name string) (int, error) {
+	ui.PrintLock("Encrypting as binary...")
+
+	vaultData, err := json.Marshal(vaultFile)
+	if err != nil {
+		return 0, fmt.Errorf("failed to marshal vault file: %w", err)
+	}
+
+	hexEncrypted, err := crypto.EncryptBinary(vaultData, masterKey)
+	if err != nil {
+		return 0, fmt.Errorf("failed to encrypt binary: %w", err)
+	}
+
+	if err := uploadToGitHub(client, cfg, remotePath, []byte(hexEncrypted), name); err != nil {
+		return 0, err
+	}
+
+	return len(hexEncrypted), nil
 }
 
 func uploadToGitHub(client *github.Client, cfg *config.Config, remotePath string, vaultData []byte, name string) error {
@@ -244,13 +264,9 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	vaultData, err := json.MarshalIndent(vaultFile, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal vault file: %w", err)
-	}
-
 	remotePath := fmt.Sprintf("envs/%s.vty", name)
-	if err := uploadToGitHub(client, cfg, remotePath, vaultData, name); err != nil {
+	encryptedSize, err := encryptAndUploadBinary(client, cfg, remotePath, vaultFile, sess.MasterKey, name)
+	if err != nil {
 		return err
 	}
 
@@ -260,7 +276,7 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Path:    %s\n", remotePath)
 	fmt.Printf("  Size:    %s → %s\n",
 		ui.FormatBytes(originalSize),
-		ui.FormatBytes(int64(len(vaultData))))
+		ui.FormatBytes(int64(encryptedSize)))
 	fmt.Printf("  Repo:    %s\n", cfg.Repo)
 
 	return nil
@@ -297,11 +313,6 @@ func runPushSSH(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	vaultData, err := json.MarshalIndent(vaultFile, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal vault file: %w", err)
-	}
-
 	remotePath := fmt.Sprintf("ssh/%s/%s.vty", sess.Username, name)
 
 	ctx := context.Background()
@@ -315,7 +326,8 @@ func runPushSSH(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to ensure SSH user directory: %w", err)
 	}
 
-	if err := uploadToGitHub(client, cfg, remotePath, vaultData, name); err != nil {
+	encryptedSize, err := encryptAndUploadBinary(client, cfg, remotePath, vaultFile, sess.MasterKey, name)
+	if err != nil {
 		return err
 	}
 
@@ -326,7 +338,7 @@ func runPushSSH(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Path:    %s\n", remotePath)
 	fmt.Printf("  Size:    %s → %s\n",
 		ui.FormatBytes(originalSize),
-		ui.FormatBytes(int64(len(vaultData))))
+		ui.FormatBytes(int64(encryptedSize)))
 	fmt.Printf("  Repo:    %s\n", cfg.Repo)
 
 	return nil
