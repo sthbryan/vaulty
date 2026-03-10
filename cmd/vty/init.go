@@ -353,6 +353,15 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 
 	cfg.Metadata = metadata
 
+	// Auto-trigger login flow
+	fmt.Println()
+	fmt.Println(ui.InfoStyle.Render("🔐 Creating your session..."))
+	fmt.Println()
+
+	if err := runLogin(nil, []string{}); err != nil {
+		logger.Warn("auto-login failed, you can run 'vty login' manually", "error", err)
+	}
+
 	return nil
 }
 
