@@ -78,8 +78,16 @@ func runUnlink(cmd *cobra.Command, args []string) error {
 	// Clear all sessions
 	sessionMgr.Clear()
 
-	// Delete cache directory
+	// Delete .vaulty directory (all local traces)
 	home, err := os.UserHomeDir()
+	if err == nil {
+		vautyDir := filepath.Join(home, ".vaulty")
+		if err := os.RemoveAll(vautyDir); err != nil && !os.IsNotExist(err) {
+			logger.Warn("Failed to delete .vaulty directory", "error", err)
+		}
+	}
+
+	// Delete cache directory
 	if err == nil {
 		cacheDir := filepath.Join(home, ".vty", "cache")
 		if err := os.RemoveAll(cacheDir); err != nil && !os.IsNotExist(err) {
