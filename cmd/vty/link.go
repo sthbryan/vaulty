@@ -26,6 +26,10 @@ This command will:
 }
 
 func runLink(cmd *cobra.Command, args []string) error {
+	fmt.Println()
+	ui.PrintAnimatedLogo()
+	fmt.Println()
+
 	cfg, err := config.Load("")
 	if err != nil {
 		cfg = &config.Config{}

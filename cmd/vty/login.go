@@ -31,6 +31,10 @@ This command will:
 }
 
 func runLogin(cmd *cobra.Command, args []string) error {
+	fmt.Println()
+	ui.PrintAnimatedLogo()
+	fmt.Println()
+
 	cfg, err := config.Load("")
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)

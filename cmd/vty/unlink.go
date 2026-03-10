@@ -28,6 +28,10 @@ You can re-link Vaulty anytime by running 'vty init' again.`,
 }
 
 func runUnlink(cmd *cobra.Command, args []string) error {
+	fmt.Println()
+	ui.PrintAnimatedLogo()
+	fmt.Println()
+
 	configPath := config.DefaultPath()
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {

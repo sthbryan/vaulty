@@ -16,18 +16,8 @@ import (
 	"github.com/DeadBryam/vaulty/internal/password"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
-
-const logo = `
-██╗   ██╗ █████╗ ██╗   ██╗██╗  ████████╗██╗   ██╗
-██║   ██║██╔══██╗██║   ██║██║  ╚══██╔══╝╚██╗ ██╔╝
-██║   ██║███████║██║   ██║██║     ██║    ╚████╔╝ 
-╚██╗ ██╔╝██╔══██║██║   ██║██║     ██║     ╚██╔╝  
- ╚████╔╝ ██║  ██║╚██████╔╝███████╗██║      ██║   
-  ╚═══╝  ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝      ╚═╝   
-`
 
 var initCmd = &cobra.Command{
 	Use:   "init",
@@ -43,10 +33,7 @@ This command will guide you through:
 
 func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println()
-	fmt.Println(lipgloss.NewStyle().
-		Foreground(lipgloss.Color(ui.Primary)).
-		Bold(true).
-		Render(logo))
+	ui.PrintAnimatedLogo()
 	fmt.Println(ui.TitleStyle.Render("✨ Welcome to Vaulty!"))
 	fmt.Println(ui.MutedStyle.Render("  Secure secret management powered by GitHub"))
 	fmt.Println()
@@ -308,10 +295,7 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 	fmt.Println(ui.WarningStyle.Render("⚠️  IMPORTANT: Save your recovery seed phrase"))
 	fmt.Println()
 	fmt.Println(ui.InfoStyle.Render("Recovery seed phrase:"))
-	fmt.Println(lipgloss.NewStyle().
-		Foreground(lipgloss.Color(ui.Warning)).
-		Bold(true).
-		Render(seedPhrase))
+	fmt.Println(ui.WarningStyle.Render(seedPhrase))
 	fmt.Println()
 
 	saveToFile, err := ui.AskConfirm("Save seed phrase to a file?", true)
