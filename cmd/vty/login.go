@@ -204,6 +204,15 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("user %q not found in vault metadata", username)
 	}
 
+	if userEntry.PasswordChallenge != "" {
+		if !crypto.ValidatePasswordChallenge(masterPassword, userEntry.PasswordChallenge) {
+			fmt.Println()
+			fmt.Println(ui.ErrorStyle.Render("❌ Invalid password"))
+			fmt.Println()
+			return fmt.Errorf("password validation failed")
+		}
+	}
+
 	fmt.Println(ui.MutedStyle.Render("Creating session..."))
 	sess := session.NewSession(username, userEntry.Role, masterKey, vaultData)
 	session.GetManager().Create(sess)
