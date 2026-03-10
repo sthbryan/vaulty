@@ -14,6 +14,7 @@ import (
 	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/password"
+	"github.com/DeadBryam/vaulty/internal/session"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
@@ -344,8 +345,13 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 	fmt.Println(ui.InfoStyle.Render("🔐 Creating your session..."))
 	fmt.Println()
 
-	if err := runLogin(nil, []string{}); err != nil {
+	sess, err := authenticateUser(cfg, password1)
+	if err != nil {
 		logger.Warn("auto-login failed, you can run 'vty login' manually", "error", err)
+	} else {
+		mgr := session.GetManager()
+		mgr.Create(sess)
+		fmt.Println(ui.SuccessStyle.Render(fmt.Sprintf("✅ Logged in as %s (%s)", sess.Username, sess.Role)))
 	}
 
 	return nil
