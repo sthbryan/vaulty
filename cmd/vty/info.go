@@ -17,17 +17,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all secrets in the vault",
-	Long: `List all secrets stored in your Vaulty vault.
+var infoCmd = &cobra.Command{
+	Use:   "info",
+	Short: "Show vault contents and metadata",
+	Long: `Display all secrets stored in your Vaulty vault.
 
 Shows name, type, size, and when each secret was last updated.
 Requires an active session (use 'vty unlock' first).`,
-	RunE: runList,
+	RunE: runInfo,
 }
 
-func runList(cmd *cobra.Command, args []string) error {
+func runInfo(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load("")
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
@@ -139,5 +139,5 @@ func renderSecretTable(secrets []models.SecretInfo) {
 }
 
 func init() {
-	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(infoCmd)
 }
