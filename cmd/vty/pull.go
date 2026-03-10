@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"github.com/sthbryan/vaulty/internal/github"
 	"github.com/sthbryan/vaulty/internal/password"
 	"github.com/sthbryan/vaulty/internal/ui"
+	"github.com/sthbryan/vaulty/pkg/models"
 )
 
 var (
@@ -99,13 +101,13 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decoding content: %w", err)
 	}
 
-	encryptedData, err := crypto.DeserializeEncryptedData(encodedData)
-	if err != nil {
-		return fmt.Errorf("deserializing encrypted data: %w", err)
+	var vaultFile models.VaultFile
+	if err := json.Unmarshal(encodedData, &vaultFile); err != nil {
+		return fmt.Errorf("unmarshaling vault file: %w", err)
 	}
 
 	logger.Info("🔓 Decrypting...")
-	compressedData, err := crypto.Decrypt(encryptedData, passwordStr)
+	compressedData, err := crypto.Decrypt(&vaultFile.Data, passwordStr)
 	if err != nil {
 		if err == crypto.ErrDecryptionFailed {
 			return fmt.Errorf("decryption failed: invalid password")
