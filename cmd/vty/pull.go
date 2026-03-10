@@ -165,7 +165,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func getOutputFilename(name string) (string, error) {
+func getOutputFilename(_ string) (string, error) {
 	if pullOutput != "" {
 		return pullOutput, nil
 	}
