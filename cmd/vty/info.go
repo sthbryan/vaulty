@@ -58,6 +58,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	fmt.Println(ui.MutedStyle.Render("Fetching vault contents..."))
 
 	var secrets []models.SecretInfo
+	var sshKeys []github.SSHKeyInfo
 
 	envItems, err := client.ListDirectory(ctx, owner, repo, "envs")
 	if err == nil {
@@ -75,19 +76,20 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	sshItems, err := client.ListDirectory(ctx, owner, repo, "ssh")
+	if cfg.CurrentUserRole == "owner" {
+		sshKeys, err = client.ListAllSSHKeys(ctx, owner, repo)
+	} else {
+		sshKeys, err = client.ListSSHKeys(ctx, owner, repo, cfg.CurrentUser)
+	}
 	if err == nil {
-		for _, item := range sshItems {
-			if strings.HasSuffix(item.Name, ".vty") {
-				name := strings.TrimSuffix(item.Name, ".vty")
-				secrets = append(secrets, models.SecretInfo{
-					Name:      name,
-					Type:      models.SecretTypeSSH,
-					CreatedAt: time.Time{},
-					UpdatedAt: time.Time{},
-					Size:      int64(item.Size),
-				})
-			}
+		for _, key := range sshKeys {
+			secrets = append(secrets, models.SecretInfo{
+				Name:      key.KeyName,
+				Type:      models.SecretTypeSSH,
+				CreatedAt: time.Time{},
+				UpdatedAt: time.Time{},
+				Size:      int64(key.Size),
+			})
 		}
 	}
 
@@ -104,11 +106,11 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		return secrets[i].Type < secrets[j].Type
 	})
 
-	renderDetailedVaultInfo(cfg, secrets, cfg.UpdatedAt)
+	renderDetailedVaultInfo(cfg, secrets, sshKeys, cfg.UpdatedAt)
 	return nil
 }
 
-func renderDetailedVaultInfo(cfg *config.Config, secrets []models.SecretInfo, lastSync time.Time) {
+func renderDetailedVaultInfo(cfg *config.Config, secrets []models.SecretInfo, sshKeys []github.SSHKeyInfo, lastSync time.Time) {
 	fmt.Println()
 
 	fmt.Println(ui.MutedStyle.Render("User: " + cfg.CurrentUser + " (" + cfg.CurrentUserRole + ")"))
@@ -135,22 +137,19 @@ func renderDetailedVaultInfo(cfg *config.Config, secrets []models.SecretInfo, la
 		fmt.Println()
 	}
 
-	if len(sshSecrets) > 0 {
+	if len(sshKeys) > 0 {
 		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== SSH KEYS ==="))
-		renderSecretsTable(sshSecrets)
+		renderSSHKeysTable(sshKeys, cfg.CurrentUserRole)
 		fmt.Println()
 	}
 
 	totalSize := int64(0)
 	envCount := 0
-	sshCount := 0
+	sshCount := len(sshKeys)
 	for _, s := range secrets {
 		totalSize += s.Size
-		switch s.Type {
-		case models.SecretTypeEnv:
+		if s.Type == models.SecretTypeEnv {
 			envCount++
-		case models.SecretTypeSSH:
-			sshCount++
 		}
 	}
 
@@ -164,6 +163,26 @@ func renderDetailedVaultInfo(cfg *config.Config, secrets []models.SecretInfo, la
 	fmt.Printf("%s env + ", ui.HighlightStyle.Render(formatSize(calculateTypeSize(secrets, models.SecretTypeEnv))))
 	fmt.Printf("%s ssh)\n", ui.HighlightStyle.Render(formatSize(calculateTypeSize(secrets, models.SecretTypeSSH))))
 	fmt.Println()
+
+	if cfg.CurrentUserRole == "owner" {
+		fmt.Println("  SSH Breakdown:")
+		userKeyCounts := make(map[string]int)
+		userKeySizes := make(map[string]int64)
+		for _, key := range sshKeys {
+			userKeyCounts[key.Username]++
+			userKeySizes[key.Username] += int64(key.Size)
+		}
+		for username, count := range userKeyCounts {
+			fmt.Printf("    %s: %s (%s)\n",
+				ui.HighlightStyle.Render(username),
+				ui.HighlightStyle.Render(fmt.Sprintf("%d keys", count)),
+				ui.HighlightStyle.Render(formatSize(userKeySizes[username])))
+		}
+		fmt.Println()
+	} else {
+		fmt.Printf("  My SSH Keys:   %s\n", ui.HighlightStyle.Render(fmt.Sprintf("%d", sshCount)))
+		fmt.Println()
+	}
 
 	if cfg.CurrentUserRole == "owner" && cfg.Metadata != nil {
 		ownerCount := 0
@@ -245,6 +264,57 @@ func renderSecretsTable(secrets []models.SecretInfo) {
 	}
 
 	fmt.Println(t.Render())
+}
+
+func renderSSHKeysTable(keys []github.SSHKeyInfo, role string) {
+	if role == "owner" {
+		t := table.New().
+			Border(lipgloss.NormalBorder()).
+			BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+			StyleFunc(func(row, col int) lipgloss.Style {
+				if row == 0 {
+					return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary))
+				}
+				if row%2 == 0 {
+					return lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+				}
+				return lipgloss.NewStyle()
+			}).
+			Headers("USERNAME", "KEYNAME", "SIZE")
+
+		for _, key := range keys {
+			t.Row(
+				key.Username,
+				key.KeyName,
+				formatSize(int64(key.Size)),
+			)
+		}
+
+		fmt.Println(t.Render())
+	} else {
+		t := table.New().
+			Border(lipgloss.NormalBorder()).
+			BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+			StyleFunc(func(row, col int) lipgloss.Style {
+				if row == 0 {
+					return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary))
+				}
+				if row%2 == 0 {
+					return lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+				}
+				return lipgloss.NewStyle()
+			}).
+			Headers("KEYNAME", "SIZE")
+
+		for _, key := range keys {
+			t.Row(
+				key.KeyName,
+				formatSize(int64(key.Size)),
+			)
+		}
+
+		fmt.Println(t.Render())
+	}
 }
 
 func formatSize(bytes int64) string {

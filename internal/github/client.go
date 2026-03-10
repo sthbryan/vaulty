@@ -209,6 +209,12 @@ type UserEntry struct {
 	AddedAt   string `json:"added_at"`
 }
 
+type SSHKeyInfo struct {
+	Username string
+	KeyName  string
+	Size     int
+}
+
 func (c *Client) DeleteContent(ctx context.Context, owner, repo, path, sha string) error {
 	url := fmt.Sprintf("%s/repos/%s/%s/contents/%s", c.BaseURL, owner, repo, path)
 
@@ -413,45 +419,47 @@ func (c *Client) EnsureSSHUserDir(ctx context.Context, owner, repo, username str
 	return c.PutContent(ctx, owner, repo, path, req)
 }
 
-func (c *Client) ListSSHKeys(ctx context.Context, owner, repo, username string) ([]string, error) {
+func (c *Client) ListSSHKeys(ctx context.Context, owner, repo, username string) ([]SSHKeyInfo, error) {
 	path := fmt.Sprintf("ssh/%s", username)
 	items, err := c.ListDirectory(ctx, owner, repo, path)
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
-			return []string{}, nil
+			return []SSHKeyInfo{}, nil
 		}
 		return nil, fmt.Errorf("failed to list SSH keys: %w", err)
 	}
 
-	var keys []string
+	var keys []SSHKeyInfo
 	for _, item := range items {
 		if item.Type == "file" && strings.HasSuffix(item.Name, ".vty") {
-			keys = append(keys, item.Name)
+			keys = append(keys, SSHKeyInfo{
+				Username: username,
+				KeyName:  strings.TrimSuffix(item.Name, ".vty"),
+				Size:     item.Size,
+			})
 		}
 	}
 
 	return keys, nil
 }
 
-func (c *Client) ListAllSSHKeys(ctx context.Context, owner, repo string) (map[string][]string, error) {
+func (c *Client) ListAllSSHKeys(ctx context.Context, owner, repo string) ([]SSHKeyInfo, error) {
 	items, err := c.ListDirectory(ctx, owner, repo, "ssh")
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
-			return map[string][]string{}, nil
+			return []SSHKeyInfo{}, nil
 		}
 		return nil, fmt.Errorf("failed to list SSH directory: %w", err)
 	}
 
-	result := make(map[string][]string)
+	var result []SSHKeyInfo
 	for _, item := range items {
 		if item.Type == "dir" {
 			keys, err := c.ListSSHKeys(ctx, owner, repo, item.Name)
 			if err != nil {
 				continue
 			}
-			if len(keys) > 0 {
-				result[item.Name] = keys
-			}
+			result = append(result, keys...)
 		}
 	}
 
