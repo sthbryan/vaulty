@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,10 +10,40 @@ import (
 	"time"
 )
 
+type Base64Bytes []byte
+
+func (b Base64Bytes) MarshalJSON() ([]byte, error) {
+	if b == nil {
+		return []byte("null"), nil
+	}
+	encoded := base64.StdEncoding.EncodeToString(b)
+	return json.Marshal(encoded)
+}
+
+func (b *Base64Bytes) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		*b = nil
+		return nil
+	}
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	decoded, err := base64.StdEncoding.DecodeString(str)
+	if err != nil {
+		return err
+	}
+	*b = decoded
+	return nil
+}
+
 type Config struct {
-	Repo      string    `json:"repo"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Repo          string      `json:"repo"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	DeviceSalt    Base64Bytes `json:"device_salt"`
+	CacheDuration string      `json:"cache_duration"`
+	StorageType   string      `json:"storage_type"`
 }
 
 func DefaultPath() string {
@@ -53,6 +85,20 @@ func (c *Config) Save(path string) error {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
+	if c.DeviceSalt == nil || len(c.DeviceSalt) == 0 {
+		if err := c.GenerateDeviceSalt(); err != nil {
+			return fmt.Errorf("generating device salt: %w", err)
+		}
+	}
+
+	if c.CacheDuration == "" {
+		c.CacheDuration = "15m"
+	}
+
+	if c.StorageType == "" {
+		c.StorageType = "auto"
+	}
+
 	c.UpdatedAt = time.Now()
 	if c.CreatedAt.IsZero() {
 		c.CreatedAt = c.UpdatedAt
@@ -67,6 +113,15 @@ func (c *Config) Save(path string) error {
 		return fmt.Errorf("writing config file: %w", err)
 	}
 
+	return nil
+}
+
+func (c *Config) GenerateDeviceSalt() error {
+	salt := make([]byte, 32)
+	if _, err := rand.Read(salt); err != nil {
+		return fmt.Errorf("generating random bytes: %w", err)
+	}
+	c.DeviceSalt = salt
 	return nil
 }
 
