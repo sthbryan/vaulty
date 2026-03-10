@@ -24,6 +24,7 @@ func ValidateCanary(data []byte, password string, deviceSalt []byte) error {
 	if err != nil {
 		return err
 	}
+
 	compositePassword := password + string(deviceSalt)
 	plaintext, err := Decrypt(encrypted, compositePassword)
 	if err != nil {
@@ -80,4 +81,24 @@ func DecryptPasswordWithSeed(data []byte, seed string) (string, error) {
 		return "", err
 	}
 	return string(plaintext), nil
+}
+
+func EncryptDeviceSalt(deviceSalt []byte, password string) ([]byte, error) {
+	encrypted, err := Encrypt(deviceSalt, password)
+	if err != nil {
+		return nil, err
+	}
+	return SerializeEncryptedData(encrypted), nil
+}
+
+func DecryptDeviceSalt(data []byte, password string) ([]byte, error) {
+	encrypted, err := DeserializeEncryptedData(data)
+	if err != nil {
+		return nil, err
+	}
+	plaintext, err := Decrypt(encrypted, password)
+	if err != nil {
+		return nil, err
+	}
+	return plaintext, nil
 }

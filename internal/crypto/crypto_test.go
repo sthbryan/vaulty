@@ -701,3 +701,193 @@ func BenchmarkDecryptChunks(b *testing.B) {
 		}
 	}
 }
+
+func TestGenerateMasterKey(t *testing.T) {
+	key, err := GenerateMasterKey()
+	if err != nil {
+		t.Fatalf("GenerateMasterKey() error = %v, wantErr false", err)
+	}
+
+	if len(key) != MasterKeySize {
+		t.Errorf("GenerateMasterKey() len = %d, want %d", len(key), MasterKeySize)
+	}
+
+	key2, _ := GenerateMasterKey()
+	if bytes.Equal(key, key2) {
+		t.Error("GenerateMasterKey() generated duplicate keys")
+	}
+}
+
+func TestValidateMasterKey(t *testing.T) {
+	tests := []struct {
+		name    string
+		key     []byte
+		wantErr bool
+	}{
+		{
+			name:    "valid 32 byte key",
+			key:     make([]byte, 32),
+			wantErr: false,
+		},
+		{
+			name:    "invalid 16 byte key",
+			key:     make([]byte, 16),
+			wantErr: true,
+		},
+		{
+			name:    "invalid 64 byte key",
+			key:     make([]byte, 64),
+			wantErr: true,
+		},
+		{
+			name:    "invalid empty key",
+			key:     []byte{},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateMasterKey(tt.key)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateMasterKey() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestEncryptMasterKeyWithPassword(t *testing.T) {
+	password := "testpassword123"
+	masterKey, _ := GenerateMasterKey()
+
+	encrypted, err := EncryptMasterKeyWithPassword(masterKey, password)
+	if err != nil {
+		t.Fatalf("EncryptMasterKeyWithPassword() error = %v", err)
+	}
+
+	if encrypted.Salt == nil || len(encrypted.Salt) == 0 {
+		t.Error("EncryptMasterKeyWithPassword() salt is empty")
+	}
+
+	if encrypted.IV == nil || len(encrypted.IV) == 0 {
+		t.Error("EncryptMasterKeyWithPassword() IV is empty")
+	}
+
+	if encrypted.Ciphertext == nil || len(encrypted.Ciphertext) == 0 {
+		t.Error("EncryptMasterKeyWithPassword() ciphertext is empty")
+	}
+}
+
+func TestEncryptMasterKeyWithPassword_InvalidKey(t *testing.T) {
+	password := "testpassword123"
+	invalidKey := make([]byte, 16)
+
+	_, err := EncryptMasterKeyWithPassword(invalidKey, password)
+	if err == nil {
+		t.Error("EncryptMasterKeyWithPassword() with invalid key should error")
+	}
+}
+
+func TestDecryptMasterKeyWithPassword(t *testing.T) {
+	password := "testpassword123"
+	originalKey, _ := GenerateMasterKey()
+
+	encrypted, _ := EncryptMasterKeyWithPassword(originalKey, password)
+	decrypted, err := DecryptMasterKeyWithPassword(encrypted, password)
+
+	if err != nil {
+		t.Fatalf("DecryptMasterKeyWithPassword() error = %v", err)
+	}
+
+	if !bytes.Equal(originalKey, decrypted) {
+		t.Error("DecryptMasterKeyWithPassword() decrypted key does not match original")
+	}
+}
+
+func TestDecryptMasterKeyWithPassword_WrongPassword(t *testing.T) {
+	password := "testpassword123"
+	originalKey, _ := GenerateMasterKey()
+
+	encrypted, _ := EncryptMasterKeyWithPassword(originalKey, password)
+	_, err := DecryptMasterKeyWithPassword(encrypted, "wrongpassword")
+
+	if err == nil {
+		t.Error("DecryptMasterKeyWithPassword() with wrong password should error")
+	}
+}
+
+func TestEncryptVaultData(t *testing.T) {
+	masterKey, _ := GenerateMasterKey()
+	plaintext := []byte("sensitive vault data")
+
+	encrypted, err := EncryptVaultData(plaintext, masterKey)
+	if err != nil {
+		t.Fatalf("EncryptVaultData() error = %v", err)
+	}
+
+	if encrypted.IV == nil || len(encrypted.IV) == 0 {
+		t.Error("EncryptVaultData() IV is empty")
+	}
+
+	if encrypted.Ciphertext == nil || len(encrypted.Ciphertext) == 0 {
+		t.Error("EncryptVaultData() ciphertext is empty")
+	}
+}
+
+func TestEncryptVaultData_InvalidKey(t *testing.T) {
+	invalidKey := make([]byte, 16)
+	plaintext := []byte("sensitive data")
+
+	_, err := EncryptVaultData(plaintext, invalidKey)
+	if err == nil {
+		t.Error("EncryptVaultData() with invalid key should error")
+	}
+}
+
+func TestDecryptVaultData(t *testing.T) {
+	masterKey, _ := GenerateMasterKey()
+	plaintext := []byte("sensitive vault data")
+
+	encrypted, _ := EncryptVaultData(plaintext, masterKey)
+	decrypted, err := DecryptVaultData(encrypted, masterKey)
+
+	if err != nil {
+		t.Fatalf("DecryptVaultData() error = %v", err)
+	}
+
+	if !bytes.Equal(plaintext, decrypted) {
+		t.Error("DecryptVaultData() decrypted data does not match original")
+	}
+}
+
+func TestDecryptVaultData_WrongKey(t *testing.T) {
+	masterKey, _ := GenerateMasterKey()
+	wrongKey, _ := GenerateMasterKey()
+	plaintext := []byte("sensitive vault data")
+
+	encrypted, _ := EncryptVaultData(plaintext, masterKey)
+	_, err := DecryptVaultData(encrypted, wrongKey)
+
+	if err == nil {
+		t.Error("DecryptVaultData() with wrong key should error")
+	}
+}
+
+func TestMasterKeyRoundTrip(t *testing.T) {
+	password := "complexpassword123!@#"
+	originalKey, _ := GenerateMasterKey()
+
+	encrypted, _ := EncryptMasterKeyWithPassword(originalKey, password)
+	decrypted, _ := DecryptMasterKeyWithPassword(encrypted, password)
+	vaultData := []byte("test data")
+	encryptedVault, _ := EncryptVaultData(vaultData, decrypted)
+	decryptedVault, _ := DecryptVaultData(encryptedVault, decrypted)
+
+	if !bytes.Equal(originalKey, decrypted) {
+		t.Error("master key mismatch after encryption/decryption")
+	}
+
+	if !bytes.Equal(vaultData, decryptedVault) {
+		t.Error("vault data mismatch after encryption/decryption")
+	}
+}
