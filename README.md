@@ -123,12 +123,12 @@ This will:
 - Generate pablo's recovery seed phrase
 - Set pablo's role (viewer by default, can be changed)
 
-### 3. Other Users: Unlock the Vault
+### 3. Login to the Vault
 
-Team members unlock the vault to access secrets:
+Team members login to access secrets:
 
 ```bash
-vty unlock
+vty login
 ```
 
 This will:
@@ -136,35 +136,37 @@ This will:
 - Decrypt their copy of the masterKey
 - Create a session (valid for 24h or until logout)
 
-### 4. Sync Secrets
+**Note:** After `vty init`, you're automatically logged in — no need to run `vty login`.
+
+### 4. Push Environment Files
 
 ```bash
-vty push production .env.production
+vty push env production .env.production
 ```
 
-This compresses, encrypts, and uploads your environment file to GitHub. Only works when vault is unlocked.
+This compresses, encrypts, and uploads your environment file to GitHub in the `envs/` directory. Only works when logged in.
 
-### 5. Pull Secrets
+### 5. Pull Environment Files
 
 ```bash
-vty pull production
+vty pull env production
 ```
 
 Download and decrypt the environment file to your current directory.
 
-### 6. Lock or Logout
+### 6. Push/Pull SSH Keys
 
-Lock without logging out:
-
-```bash
-vty lock
-```
-
-Fully logout (clear credentials):
+Store SSH keys securely per-user:
 
 ```bash
-vty logout
+# Push an SSH key
+vty push ssh laptop ~/.ssh/id_rsa
+
+# Pull an SSH key
+vty pull ssh laptop
 ```
+
+SSH keys are stored per-user in `ssh/{username}/` — you only see your own SSH keys (owner sees all).
 
 ---
 
@@ -175,7 +177,7 @@ vty logout
 | Command | Description | Example |
 |---------|-------------|---------|
 | `vty init` | Initialize or link to a GitHub repository | `vty init` |
-| `vty unlock` | Decrypt vault and create session (multi-user) | `vty unlock` |
+| `vty login` | Login and create session (multi-user) | `vty login` |
 | `vty lock` | Lock vault without logging out | `vty lock` |
 | `vty logout` | Clear stored master password | `vty logout` |
 | `vty unlink` | Unlink Vaulty (keeps GitHub data) | `vty unlink` |
@@ -184,14 +186,13 @@ vty logout
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `vty sync <name> <path>` | Sync an environment file to vault | `vty sync api .env` |
-| `vty push <name>` | Push secrets to vault | `vty push api` |
-| `vty pull <name>` | Pull and decrypt secrets | `vty pull api` |
-| `vty list` | List all secrets in the vault | `vty list` |
-| `vty list --type=env` | List only environment files | `vty list --type=env` |
-| `vty list --type=ssh` | List only SSH keys | `vty list --type=ssh` |
-| `vty delete <name>` | Delete a secret from the vault | `vty delete api` |
-| `vty delete <name> --type=ssh` | Delete an SSH key | `vty delete work --type=ssh` |
+| `vty push env <name> <path>` | Push environment file to vault | `vty push env api .env` |
+| `vty push ssh <name> <path>` | Push SSH key to vault | `vty push ssh work ~/.ssh/id_rsa` |
+| `vty pull env <name>` | Pull and decrypt environment file | `vty pull env api` |
+| `vty pull ssh <name>` | Pull and decrypt SSH key | `vty pull ssh work` |
+| `vty info` | Show vault info (envs, SSH keys, users) | `vty info` |
+| `vty delete env <name>` | Delete environment file from vault | `vty delete env api` |
+| `vty delete ssh <name>` | Delete SSH key from vault | `vty delete ssh work` |
 
 ### Multi-User Management
 
@@ -231,6 +232,7 @@ Vaulty takes security seriously:
 - **Auto-Unlink** — User automatically unlinked if removed from vault during operations
 - **Cached Encryption** — Vault cached locally with 24h TTL, encrypted with user password
 - **Session Management** — MasterKey loaded only during session, locked/cleared on logout
+- **Per-User SSH Keys** — SSH keys stored per-user in `ssh/{username}/` — users only see their own keys (owner sees all)
 
 ### Password Cache
 
@@ -283,12 +285,17 @@ Configuration is stored at `~/.vty/config.json`:
 ### GitHub Vault Structure
 
 ```
+envs/
+├── production.vty          ← Encrypted environment file
+└── staging.vty
+ssh/
+├── alice/
+│   ├── laptop.vty         ← Encrypted SSH private key
+│   └── work.vty
+└── bob/
+    └── personal.vty
 .vaulty/
-├── metadata.json           ← Repo owner, user list, version
-├── vault.enc              ← All secrets encrypted with masterKey
-├── keys/
-│   ├── ana.enc            ← MasterKey encrypted with ana's password
-│   └── pablo.enc          ← MasterKey encrypted with pablo's password
+├── metadata.json          ← Repo owner, user list, version
 └── recovery/
     ├── ana.recovery       ← Ana's recovery seed phrase
     └── pablo.recovery     ← Pablo's recovery seed phrase
