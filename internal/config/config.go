@@ -65,6 +65,7 @@ type Config struct {
 	CurrentUser     string      `json:"current_user,omitempty"`
 	CurrentUserRole string      `json:"current_user_role,omitempty"`
 	Metadata        *Metadata   `json:"metadata,omitempty"`
+	Environments    []string    `json:"environments"`
 }
 
 func DefaultPath() string {
@@ -114,6 +115,10 @@ func (c *Config) Save(path string) error {
 		c.StorageType = "auto"
 	}
 
+	if len(c.Environments) == 0 {
+		c.Environments = []string{"production"}
+	}
+
 	c.UpdatedAt = time.Now()
 	if c.CreatedAt.IsZero() {
 		c.CreatedAt = c.UpdatedAt
@@ -136,6 +141,27 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("repo is required")
 	}
 	return nil
+}
+
+// GetEnvironments returns the list of environments, defaulting to ["production"] if empty
+func (c *Config) GetEnvironments() []string {
+	if len(c.Environments) == 0 {
+		return []string{"production"}
+	}
+	return c.Environments
+}
+
+// HasEnvironment checks if an environment exists in the config
+func (c *Config) HasEnvironment(env string) bool {
+	if env == "" || env == "all" {
+		return true // shared/all is always valid
+	}
+	for _, e := range c.GetEnvironments() {
+		if e == env {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Config) SetRepo(repo string) {
