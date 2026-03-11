@@ -14,14 +14,11 @@ Vaulty is a secure CLI tool for managing environment variables, SSH keys, and te
 
 - **Secure Storage** — AES-256-GCM encryption with PBKDF2 key derivation
 - **GitHub Backend** — Store encrypted secrets in your private GitHub repository
-- **Master Password** — Single password for all operations with secure OS keyring storage
 - **Recovery Seed** — 12-word BIP39 seed phrase per user for password recovery
 - **Multi-User Support** — Team vaults with Owner, Editor, and Viewer roles
-- **Session Management** — Lock/unlock vault, membership validation on operations
 - **SSH Key Management** — Securely store and sync SSH private keys
 - **Cross-Platform** — Works on macOS, Linux, and Windows
 - **Zero-Config** — Works out of the box with GitHub CLI authentication
-- **Compressed** — Automatic gzip compression before encryption
 
 ---
 
@@ -223,7 +220,6 @@ Vaulty takes security seriously:
 - **Password Storage** — OS keyring (macOS Keychain, Linux Secret Service, Windows Credential Manager) with memory cache fallback
 - **No Plaintext** — Secrets are never stored in plaintext locally or on GitHub
 - **Recovery** — BIP39 seed phrase per user for password recovery without exposing secrets
-- **Membership Validation** — User access validated on every pull/push/sync operation
 - **Automatic Key Rotation** — MasterKey rotated when users are removed, all remaining users re-encrypted
 
 ### Multi-User Security
@@ -286,19 +282,23 @@ Configuration is stored at `~/.vty/config.json`:
 
 ```
 envs/
-├── production.vty          ← Encrypted environment file
+├── production.vty          ← Encrypted + compressed environment file
 └── staging.vty
 ssh/
 ├── alice/
-│   ├── laptop.vty         ← Encrypted SSH private key
+│   ├── laptop.vty         ← Encrypted + compressed SSH private key
 │   └── work.vty
 └── bob/
     └── personal.vty
 .vaulty/
-├── metadata.vty          ← Repo owner, user list, version
+├── metadata.vty           ← Compressed user list & vault info (hex/gzip)
+├── vault.vty              ← Compressed vault data (hex/gzip)
+├── keys/
+│   ├── ana.vty            ← Compressed encrypted masterKey per user
+│   └── pablo.vty
 └── recovery/
-    ├── ana.recovery       ← Ana's recovery seed phrase
-    └── pablo.recovery     ← Pablo's recovery seed phrase
+    ├── ana.recovery.vty   ← Compressed recovery seed phrase
+    └── pablo.recovery.vty
 ```
 
 ---
