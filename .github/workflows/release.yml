@@ -1,0 +1,98 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: darwin
+            arch: amd64
+            suffix: ''
+          - os: darwin
+            arch: arm64
+            suffix: ''
+          - os: linux
+            arch: amd64
+            suffix: ''
+          - os: linux
+            arch: arm64
+            suffix: ''
+          - os: windows
+            arch: amd64
+            suffix: '.exe'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+    
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.os }}
+        GOARCH: ${{ matrix.arch }}
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        COMMIT=$(git rev-parse --short HEAD)
+        DATE=$(date +%Y-%m-%d)
+        
+        OUTPUT="bin/vty-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.suffix }}"
+        
+        CGO_ENABLED=0 go build \
+          -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
+          -o "${OUTPUT}" \
+          ./cmd/vty
+        
+        echo "Built: ${OUTPUT}"
+        ls -la bin/
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: vty-${{ matrix.os }}-${{ matrix.arch }}
+        path: bin/vty-*
+        retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+        merge-multiple: true
+    
+    - name: Create checksums
+      run: |
+        cd artifacts
+        sha256sum * > checksums.txt
+        cat checksums.txt
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: artifacts/*
+        generate_release_notes: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
