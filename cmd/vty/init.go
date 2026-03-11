@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -60,21 +61,60 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	if repoInput == "" {
-		err := huh.NewInput().
-			Title("Repository").
-			Placeholder("owner/repo").
-			Value(&repoInput).
+		var vaultOption string
+		err := huh.NewSelect[string]().
+			Title("Vault name").
+			Description("Choose a name for your vault repository").
+			Options(
+				huh.NewOption("my-vault (default)", "my-vault"),
+				huh.NewOption("Custom name", "custom"),
+			).
+			Value(&vaultOption).
+			Run()
+		if err != nil {
+			return fmt.Errorf("form cancelled")
+		}
+
+		if vaultOption == "custom" {
+			err := huh.NewInput().
+				Title("Enter vault name").
+				Placeholder("my-secrets").
+				Value(&vaultOption).
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("vault name is required")
+					}
+					if strings.Contains(s, " ") {
+						return fmt.Errorf("vault name cannot contain spaces")
+					}
+					if !regexp.MustCompile(`^[a-zA-Z0-9\-_]+$`).MatchString(s) {
+						return fmt.Errorf("vault name can only contain letters, numbers, hyphens and underscores")
+					}
+					return nil
+				}).
+				Run()
+			if err != nil {
+				return fmt.Errorf("form cancelled")
+			}
+		}
+
+		var ownerInput string
+		err = huh.NewInput().
+			Title("GitHub owner/organization").
+			Placeholder("your-username or org name").
+			Value(&ownerInput).
 			Validate(func(s string) error {
 				if s == "" {
-					return fmt.Errorf("repository is required")
+					return fmt.Errorf("owner is required")
 				}
-				_, _, err := github.ParseRepo(s)
-				return err
+				return nil
 			}).
 			Run()
 		if err != nil {
 			return fmt.Errorf("form cancelled")
 		}
+
+		repoInput = ownerInput + "/" + vaultOption
 	}
 
 	owner, repo, _ := github.ParseRepo(repoInput)
@@ -137,10 +177,16 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		Value(&username).
 		Validate(func(s string) error {
 			if s == "" {
-				return fmt.Errorf("username is required")
+				return fmt.Errorf("username cannot be empty")
 			}
 			if len(s) < 3 {
 				return fmt.Errorf("username must be at least 3 characters")
+			}
+			if strings.Contains(s, " ") {
+				return fmt.Errorf("username cannot contain spaces")
+			}
+			if !regexp.MustCompile(`^[a-zA-Z0-9\-_]+$`).MatchString(s) {
+				return fmt.Errorf("username can only contain letters, numbers, hyphens and underscores")
 			}
 			return nil
 		}).
@@ -198,6 +244,12 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		EchoMode(huh.EchoModePassword).
 		Value(&password1).
 		Validate(func(s string) error {
+			if s == "" {
+				return fmt.Errorf("password cannot be empty")
+			}
+			if strings.Contains(s, " ") {
+				return fmt.Errorf("password cannot contain spaces")
+			}
 			if len(s) < 8 {
 				return fmt.Errorf("password must be at least 8 characters")
 			}
@@ -214,6 +266,9 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		EchoMode(huh.EchoModePassword).
 		Value(&password2).
 		Validate(func(s string) error {
+			if s == "" {
+				return fmt.Errorf("please confirm your password")
+			}
 			if s != password1 {
 				return fmt.Errorf("passwords do not match")
 			}
