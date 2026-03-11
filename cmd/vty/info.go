@@ -19,15 +19,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var infoCmd = &cobra.Command{
-	Use:   "info",
-	Short: "Show vault contents and metadata",
-	Long: `Display all secrets stored in your Vaulty vault.
+var (
+	infoCmd = &cobra.Command{
+		Use:   "info",
+		Short: "Show vault contents and metadata",
+		Long: `Display all secrets stored in your Vaulty vault.
 
 Shows name, type, size, and when each secret was last updated.
 Requires an active session (use 'vty login' first).`,
-	RunE: runInfo,
-}
+		RunE: runInfo,
+	}
+
+	infoEnv string
+)
 
 func fetchAndDecryptVtyFile(ctx context.Context, client *github.Client, owner, repo, path string, masterKey []byte) ([]byte, error) {
 	content, err := client.GetContent(ctx, owner, repo, path)
@@ -50,6 +54,93 @@ func fetchAndDecryptVtyFile(ctx context.Context, client *github.Client, owner, r
 	}
 
 	return plaintext, nil
+}
+
+func listEnvSecrets(ctx context.Context, client *github.Client, owner, repo, env string, masterKey []byte) ([]models.SecretInfo, error) {
+	var path string
+	if env == "shared" {
+		path = "envs"
+	} else {
+		path = fmt.Sprintf("envs/%s", env)
+	}
+
+	items, err := client.ListDirectory(ctx, owner, repo, path)
+	if err != nil {
+		return nil, err
+	}
+
+	var secrets []models.SecretInfo
+	for _, item := range items {
+		if strings.HasSuffix(item.Name, ".vty") {
+			name := strings.TrimSuffix(item.Name, ".vty")
+			filePath := fmt.Sprintf("%s/%s", path, item.Name)
+
+			decryptedContent, decryptErr := fetchAndDecryptVtyFile(ctx, client, owner, repo, filePath, masterKey)
+			var size int64
+			if decryptErr == nil {
+				size = int64(len(decryptedContent))
+			} else {
+				size = int64(item.Size)
+				logger.Debug("Could not decrypt env file", "name", name, "error", decryptErr)
+			}
+
+			secrets = append(secrets, models.SecretInfo{
+				Name:        name,
+				Type:        models.SecretTypeEnv,
+				Environment: env,
+				CreatedAt:   time.Time{},
+				UpdatedAt:   time.Time{},
+				Size:        size,
+			})
+		}
+	}
+
+	return secrets, nil
+}
+
+func listSecretsByEnvironment(ctx context.Context, client *github.Client, cfg *config.Config, owner, repo string, masterKey []byte) ([]models.SecretInfo, error) {
+	var allSecrets []models.SecretInfo
+
+	// If --env filter is specified
+	if infoEnv != "" {
+		if infoEnv == "shared" {
+			// List shared secrets (directly in envs/)
+			secrets, err := listEnvSecrets(ctx, client, owner, repo, "shared", masterKey)
+			if err != nil {
+				return nil, err
+			}
+			return secrets, nil
+		}
+		// Check if the environment is valid
+		if !cfg.HasEnvironment(infoEnv) {
+			return nil, fmt.Errorf("environment %q not defined in config. Defined: %v", infoEnv, cfg.GetEnvironments())
+		}
+		// List secrets for the specific environment
+		secrets, err := listEnvSecrets(ctx, client, owner, repo, infoEnv, masterKey)
+		if err != nil {
+			return nil, err
+		}
+		return secrets, nil
+	}
+
+	// List shared secrets (directly in envs/)
+	sharedSecrets, err := listEnvSecrets(ctx, client, owner, repo, "shared", masterKey)
+	if err != nil {
+		logger.Debug("Could not list shared secrets", "error", err)
+	}
+	allSecrets = append(allSecrets, sharedSecrets...)
+
+	// List secrets for each configured environment
+	for _, env := range cfg.GetEnvironments() {
+		envSecrets, err := listEnvSecrets(ctx, client, owner, repo, env, masterKey)
+		if err != nil {
+			logger.Debug("Could not list secrets for environment", "env", env, "error", err)
+			continue
+		}
+		allSecrets = append(allSecrets, envSecrets...)
+	}
+
+	return allSecrets, nil
 }
 
 func runInfo(cmd *cobra.Command, args []string) error {
@@ -104,32 +195,12 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	envItems, err := client.ListDirectory(ctx, owner, repo, "envs")
-	if err == nil {
-		for _, item := range envItems {
-			if strings.HasSuffix(item.Name, ".vty") {
-				name := strings.TrimSuffix(item.Name, ".vty")
-				path := fmt.Sprintf("envs/%s", item.Name)
-
-				decryptedContent, decryptErr := fetchAndDecryptVtyFile(ctx, client, owner, repo, path, sess.MasterKey)
-				var size int64
-				if decryptErr == nil {
-					size = int64(len(decryptedContent))
-				} else {
-					size = int64(item.Size)
-					logger.Debug("Could not decrypt env file", "name", name, "error", decryptErr)
-				}
-
-				secrets = append(secrets, models.SecretInfo{
-					Name:      name,
-					Type:      models.SecretTypeEnv,
-					CreatedAt: time.Time{},
-					UpdatedAt: time.Time{},
-					Size:      size,
-				})
-			}
-		}
+	// List secrets by environment
+	envSecrets, err := listSecretsByEnvironment(ctx, client, cfg, owner, repo, sess.MasterKey)
+	if err != nil {
+		logger.Warn("Could not list environment secrets", "error", err)
 	}
+	secrets = append(secrets, envSecrets...)
 
 	if sess.Role == "owner" {
 		sshKeys, err = client.ListAllSSHKeys(ctx, owner, repo)
@@ -189,18 +260,50 @@ func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets 
 		fmt.Println()
 	}
 
-	var envSecrets, sshSecrets []models.SecretInfo
+	// Group secrets by environment
+	envSecretsByEnv := make(map[string][]models.SecretInfo)
+	var envOrder []string
+	var sshSecrets []models.SecretInfo
 	for _, s := range secrets {
 		if s.Type == models.SecretTypeSSH {
 			sshSecrets = append(sshSecrets, s)
 		} else {
-			envSecrets = append(envSecrets, s)
+			env := s.Environment
+			if env == "" {
+				env = "shared"
+			}
+			if _, exists := envSecretsByEnv[env]; !exists {
+				envOrder = append(envOrder, env)
+			}
+			envSecretsByEnv[env] = append(envSecretsByEnv[env], s)
 		}
 	}
 
-	if len(envSecrets) > 0 {
+	// Sort environment order: shared first, then alphabetically
+	sort.Slice(envOrder, func(i, j int) bool {
+		if envOrder[i] == "shared" {
+			return true
+		}
+		if envOrder[j] == "shared" {
+			return false
+		}
+		return envOrder[i] < envOrder[j]
+	})
+
+	// Sort secrets within each environment
+	for _, env := range envOrder {
+		sort.Slice(envSecretsByEnv[env], func(i, j int) bool {
+			return envSecretsByEnv[env][i].Name < envSecretsByEnv[env][j].Name
+		})
+	}
+
+	if len(envSecretsByEnv) > 0 {
 		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== ENVIRONMENT VARIABLES ==="))
-		renderSecretsTable(envSecrets)
+		for _, env := range envOrder {
+			envSecrets := envSecretsByEnv[env]
+			fmt.Printf("\n[%s]\n", ui.HighlightStyle.Render(env))
+			renderSecretsTable(envSecrets)
+		}
 		fmt.Println()
 	}
 
@@ -443,4 +546,5 @@ func formatTime(t time.Time) string {
 
 func init() {
 	rootCmd.AddCommand(infoCmd)
+	infoCmd.Flags().StringVarP(&infoEnv, "env", "e", "", "Filter by environment")
 }
