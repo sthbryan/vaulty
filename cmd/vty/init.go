@@ -150,6 +150,43 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 	}
 
 	fmt.Println()
+	fmt.Println(ui.InfoStyle.Render("🌍 Define your environments"))
+	fmt.Println()
+
+	var environmentsInput string
+	err = huh.NewInput().
+		Title("Environments").
+		Placeholder("production, staging, development").
+		Value(&environmentsInput).
+		Validate(func(s string) error {
+			if s == "" {
+				return fmt.Errorf("at least one environment is required")
+			}
+			return nil
+		}).
+		Run()
+	if err != nil {
+		return fmt.Errorf("form cancelled")
+	}
+
+	// Parse environments
+	var environments []string
+	if strings.TrimSpace(environmentsInput) == "" {
+		environments = []string{"production"}
+	} else {
+		envParts := strings.Split(environmentsInput, ",")
+		for _, e := range envParts {
+			e = strings.TrimSpace(e)
+			if e != "" {
+				environments = append(environments, e)
+			}
+		}
+		if len(environments) == 0 {
+			environments = []string{"production"}
+		}
+	}
+
+	fmt.Println()
 	fmt.Println(ui.InfoStyle.Render("🔐 Create your master password"))
 	fmt.Println()
 
@@ -356,6 +393,7 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 	fmt.Println()
 
 	cfg.Metadata = metadata
+	cfg.Environments = environments
 
 	if err := cfg.Save(""); err != nil {
 		return fmt.Errorf("saving config: %w", err)
