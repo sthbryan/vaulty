@@ -27,6 +27,7 @@ type BinaryVaultFile struct {
 
 var (
 	pushForce bool
+	pushEnv   string
 )
 
 var pushCmd = &cobra.Command{
@@ -254,6 +255,13 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Validate environment if specified (excluding "all" which is handled specially)
+	if pushEnv != "" && pushEnv != "all" {
+		if !cfg.HasEnvironment(pushEnv) {
+			return fmt.Errorf("environment %q not defined in config. Defined: %v", pushEnv, cfg.GetEnvironments())
+		}
+	}
+
 	if err := validateFile(path); err != nil {
 		return err
 	}
@@ -263,7 +271,42 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	remotePath := fmt.Sprintf("envs/%s.vty", name)
+	// Build remote path based on --env flag
+	var remotePath string
+	if pushEnv == "" {
+		remotePath = fmt.Sprintf("envs/%s.vty", name) // shared/root
+	} else if pushEnv == "all" {
+		// Push to all environments
+		confirmed, confirmErr := ui.AskConfirm(fmt.Sprintf("Push %s to all environments?", name), false)
+		if confirmErr != nil {
+			return fmt.Errorf("confirmation failed: %w", confirmErr)
+		}
+		if !confirmed {
+			ui.PrintInfo("Push cancelled")
+			return nil
+		}
+
+		envs := cfg.GetEnvironments()
+		for _, env := range envs {
+			envPath := fmt.Sprintf("envs/%s/%s.vty", env, name)
+			ui.PrintInfo("Pushing to environment: %s", env)
+			if _, err := encryptAndUploadBinary(client, cfg, envPath, vaultFile, sess.MasterKey, name); err != nil {
+				return fmt.Errorf("failed to push to %s: %w", env, err)
+			}
+		}
+		ui.PrintSuccess("Pushed to all environments successfully!")
+		fmt.Println()
+		fmt.Printf("  Name:    %s\n", name)
+		fmt.Printf("  Envs:    %v\n", envs)
+		fmt.Printf("  Size:    %s → %s\n",
+			ui.FormatBytes(originalSize),
+			ui.FormatBytes(int64(len(vaultFile.Data)*2))) // Approximate encrypted size
+		fmt.Printf("  Repo:    %s\n", cfg.Repo)
+		return nil
+	} else {
+		remotePath = fmt.Sprintf("envs/%s/%s.vty", pushEnv, name) // specific env
+	}
+
 	encryptedSize, err := encryptAndUploadBinary(client, cfg, remotePath, vaultFile, sess.MasterKey, name)
 	if err != nil {
 		return err
@@ -378,5 +421,7 @@ func init() {
 	pushCmd.AddCommand(pushSSHCmd)
 
 	pushEnvCmd.Flags().BoolVarP(&pushForce, "force", "f", false, "Overwrite without prompting")
+	pushEnvCmd.Flags().StringVarP(&pushEnv, "env", "e", "", "Target environment (optional: production, staging, development)")
 	pushSSHCmd.Flags().BoolVarP(&pushForce, "force", "f", false, "Overwrite without prompting")
+	pushSSHCmd.Flags().StringVarP(&pushEnv, "env", "e", "", "Target environment (optional, for env files only)")
 }
