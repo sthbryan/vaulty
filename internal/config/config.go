@@ -143,7 +143,6 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// GetEnvironments returns the list of environments, defaulting to ["production"] if empty
 func (c *Config) GetEnvironments() []string {
 	if len(c.Environments) == 0 {
 		return []string{"production"}
@@ -151,10 +150,9 @@ func (c *Config) GetEnvironments() []string {
 	return c.Environments
 }
 
-// HasEnvironment checks if an environment exists in the config
 func (c *Config) HasEnvironment(env string) bool {
 	if env == "" || env == "all" {
-		return true // shared/all is always valid
+		return true
 	}
 	for _, e := range c.GetEnvironments() {
 		if e == env {

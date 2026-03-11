@@ -215,7 +215,6 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 		return fmt.Errorf("form cancelled")
 	}
 
-	// Parse environments
 	var environments []string
 	if strings.TrimSpace(environmentsInput) == "" {
 		environments = []string{"production"}

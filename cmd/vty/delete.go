@@ -17,7 +17,6 @@ var (
 	deleteUser  string
 )
 
-// Main delete command (parent)
 var deleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete secrets, environments, or vault",
@@ -31,7 +30,6 @@ Examples:
   vty delete vault                     # Delete entire vault (owner only)`,
 }
 
-// delete env <name> --env=staging
 var deleteEnvCmd = &cobra.Command{
 	Use:   "env <name>",
 	Short: "Delete a specific environment variable",
@@ -43,7 +41,6 @@ If --env is specified, deletes from envs/{env}/{name}.vty.`,
 	RunE: runDeleteEnv,
 }
 
-// delete envs --env=staging
 var deleteEnvsCmd = &cobra.Command{
 	Use:   "envs",
 	Short: "Delete all secrets from an environment",
@@ -54,7 +51,6 @@ Use with caution - this action cannot be undone.`,
 	RunE: runDeleteEnvs,
 }
 
-// delete ssh <name>
 var deleteSSHCmd = &cobra.Command{
 	Use:   "ssh <name>",
 	Short: "Delete an SSH key",
@@ -67,7 +63,6 @@ Examples:
 	RunE: runDeleteSSH,
 }
 
-// delete vault
 var deleteVaultCmd = &cobra.Command{
 	Use:   "vault",
 	Short: "Delete entire vault (DESTRUCTIVE - owner only)",
@@ -83,7 +78,6 @@ This action CANNOT be undone. Only the vault owner can perform this action.`,
 	RunE: runDeleteVault,
 }
 
-// runDeleteEnv - delete specific secret from environment
 func runDeleteEnv(cmd *cobra.Command, args []string) error {
 	name := args[0]
 
@@ -113,7 +107,6 @@ func runDeleteEnv(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid repo format: %w", err)
 	}
 
-	// Determine path based on --env flag
 	var path string
 	if deleteEnv != "" {
 		path = fmt.Sprintf("envs/%s/%s.vty", deleteEnv, name)
@@ -163,9 +156,8 @@ func runDeleteEnv(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// runDeleteEnvs - delete all secrets from an environment
 func runDeleteEnvs(cmd *cobra.Command, args []string) error {
-	// Validate --env is required
+
 	if deleteEnv == "" {
 		return fmt.Errorf("the --env flag is required for this command")
 	}
@@ -192,14 +184,12 @@ func runDeleteEnvs(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid repo format: %w", err)
 	}
 
-	// List all files in the environment directory
 	envPath := fmt.Sprintf("envs/%s", deleteEnv)
 	items, err := client.ListDirectory(ctx, owner, repoName, envPath)
 	if err != nil {
 		return fmt.Errorf("failed to list environment: %w", err)
 	}
 
-	// Filter for .vty files only
 	var secretsToDelete []struct {
 		name string
 		path string
@@ -230,7 +220,6 @@ func runDeleteEnvs(cmd *cobra.Command, args []string) error {
 	ui.PrintInfo("Repository: %s", cfg.Repo)
 	fmt.Println()
 
-	// Show what will be deleted
 	for _, secret := range secretsToDelete {
 		ui.PrintInfo("  - %s", secret.name)
 	}
@@ -247,7 +236,6 @@ func runDeleteEnvs(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Delete each secret
 	ui.PrintInfo("Deleting secrets from GitHub...")
 	deletedCount := 0
 
@@ -268,7 +256,6 @@ func runDeleteEnvs(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// runDeleteSSH - delete SSH key
 func runDeleteSSH(cmd *cobra.Command, args []string) error {
 	name := args[0]
 
@@ -298,7 +285,6 @@ func runDeleteSSH(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid repo format: %w", err)
 	}
 
-	// Determine path based on --user flag
 	var path string
 	if deleteUser != "" {
 		path = fmt.Sprintf("ssh/%s/%s.vty", deleteUser, name)
@@ -346,7 +332,6 @@ func runDeleteSSH(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// runDeleteVault - delete entire vault
 func runDeleteVault(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load("")
 	if err != nil {
@@ -357,7 +342,6 @@ func runDeleteVault(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("configuration error: %w", err)
 	}
 
-	// Only owner can delete vault
 	if !cfg.IsOwner() {
 		return fmt.Errorf("only the vault owner can delete the entire vault")
 	}
@@ -401,14 +385,13 @@ func runDeleteVault(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid repo format: %w", err)
 	}
 
-	// Define paths to delete
 	pathsToDelete := []string{".vaulty", "envs", "ssh"}
 
 	ui.PrintInfo("Deleting vault contents from GitHub...")
 	deletedCount := 0
 
 	for _, path := range pathsToDelete {
-		// Try to get the directory/file
+
 		content, err := client.GetContent(ctx, owner, repoName, path)
 		if err != nil || content == nil {
 			ui.PrintInfo("  Skipping %s (not found)", path)
@@ -434,27 +417,22 @@ func runDeleteVault(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	// Add subcommands to delete command
+
 	deleteCmd.AddCommand(deleteEnvCmd)
 	deleteCmd.AddCommand(deleteEnvsCmd)
 	deleteCmd.AddCommand(deleteSSHCmd)
 	deleteCmd.AddCommand(deleteVaultCmd)
 
-	// Register delete command with root
 	rootCmd.AddCommand(deleteCmd)
 
-	// Flags for delete env <name>
 	deleteEnvCmd.Flags().StringVar(&deleteEnv, "env", "", "Environment (optional)")
 	deleteEnvCmd.Flags().BoolVarP(&deleteForce, "force", "f", false, "Force delete without confirmation")
 
-	// Flags for delete envs
 	deleteEnvsCmd.Flags().StringVar(&deleteEnv, "env", "", "Environment (required)")
 	deleteEnvsCmd.Flags().BoolVarP(&deleteForce, "force", "f", false, "Force delete without confirmation")
 
-	// Flags for delete ssh
 	deleteSSHCmd.Flags().StringVarP(&deleteUser, "user", "u", "", "User (optional)")
 	deleteSSHCmd.Flags().BoolVarP(&deleteForce, "force", "f", false, "Force delete without confirmation")
 
-	// Flags for delete vault
 	deleteVaultCmd.Flags().BoolVarP(&deleteForce, "force", "f", false, "Force delete without confirmation")
 }

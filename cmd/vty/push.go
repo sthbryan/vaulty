@@ -255,7 +255,6 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Validate environment if specified (excluding "all" which is handled specially)
 	if pushEnv != "" && pushEnv != "all" {
 		if !cfg.HasEnvironment(pushEnv) {
 			return fmt.Errorf("environment %q not defined in config. Defined: %v", pushEnv, cfg.GetEnvironments())
@@ -271,12 +270,11 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Build remote path based on --env flag
 	var remotePath string
 	if pushEnv == "" {
-		remotePath = fmt.Sprintf("envs/%s.vty", name) // shared/root
+		remotePath = fmt.Sprintf("envs/%s.vty", name)
 	} else if pushEnv == "all" {
-		// Push to all environments
+
 		confirmed, confirmErr := ui.AskConfirm(fmt.Sprintf("Push %s to all environments?", name), false)
 		if confirmErr != nil {
 			return fmt.Errorf("confirmation failed: %w", confirmErr)
@@ -300,11 +298,11 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Envs:    %v\n", envs)
 		fmt.Printf("  Size:    %s → %s\n",
 			ui.FormatBytes(originalSize),
-			ui.FormatBytes(int64(len(vaultFile.Data)*2))) // Approximate encrypted size
+			ui.FormatBytes(int64(len(vaultFile.Data)*2)))
 		fmt.Printf("  Repo:    %s\n", cfg.Repo)
 		return nil
 	} else {
-		remotePath = fmt.Sprintf("envs/%s/%s.vty", pushEnv, name) // specific env
+		remotePath = fmt.Sprintf("envs/%s/%s.vty", pushEnv, name)
 	}
 
 	encryptedSize, err := encryptAndUploadBinary(client, cfg, remotePath, vaultFile, sess.MasterKey, name)

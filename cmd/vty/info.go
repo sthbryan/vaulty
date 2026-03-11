@@ -101,21 +101,20 @@ func listEnvSecrets(ctx context.Context, client *github.Client, owner, repo, env
 func listSecretsByEnvironment(ctx context.Context, client *github.Client, cfg *config.Config, owner, repo string, masterKey []byte) ([]models.SecretInfo, error) {
 	var allSecrets []models.SecretInfo
 
-	// If --env filter is specified
 	if infoEnv != "" {
 		if infoEnv == "shared" {
-			// List shared secrets (directly in envs/)
+
 			secrets, err := listEnvSecrets(ctx, client, owner, repo, "shared", masterKey)
 			if err != nil {
 				return nil, err
 			}
 			return secrets, nil
 		}
-		// Check if the environment is valid
+
 		if !cfg.HasEnvironment(infoEnv) {
 			return nil, fmt.Errorf("environment %q not defined in config. Defined: %v", infoEnv, cfg.GetEnvironments())
 		}
-		// List secrets for the specific environment
+
 		secrets, err := listEnvSecrets(ctx, client, owner, repo, infoEnv, masterKey)
 		if err != nil {
 			return nil, err
@@ -123,14 +122,12 @@ func listSecretsByEnvironment(ctx context.Context, client *github.Client, cfg *c
 		return secrets, nil
 	}
 
-	// List shared secrets (directly in envs/)
 	sharedSecrets, err := listEnvSecrets(ctx, client, owner, repo, "shared", masterKey)
 	if err != nil {
 		logger.Debug("Could not list shared secrets", "error", err)
 	}
 	allSecrets = append(allSecrets, sharedSecrets...)
 
-	// List secrets for each configured environment
 	for _, env := range cfg.GetEnvironments() {
 		envSecrets, err := listEnvSecrets(ctx, client, owner, repo, env, masterKey)
 		if err != nil {
@@ -195,7 +192,6 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// List secrets by environment
 	envSecrets, err := listSecretsByEnvironment(ctx, client, cfg, owner, repo, sess.MasterKey)
 	if err != nil {
 		logger.Warn("Could not list environment secrets", "error", err)
@@ -260,7 +256,6 @@ func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets 
 		fmt.Println()
 	}
 
-	// Group secrets by environment
 	envSecretsByEnv := make(map[string][]models.SecretInfo)
 	var envOrder []string
 	var sshSecrets []models.SecretInfo
@@ -279,7 +274,6 @@ func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets 
 		}
 	}
 
-	// Sort environment order: shared first, then alphabetically
 	sort.Slice(envOrder, func(i, j int) bool {
 		if envOrder[i] == "shared" {
 			return true
@@ -290,7 +284,6 @@ func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets 
 		return envOrder[i] < envOrder[j]
 	})
 
-	// Sort secrets within each environment
 	for _, env := range envOrder {
 		sort.Slice(envSecretsByEnv[env], func(i, j int) bool {
 			return envSecretsByEnv[env][i].Name < envSecretsByEnv[env][j].Name

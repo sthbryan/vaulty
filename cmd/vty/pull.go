@@ -82,7 +82,6 @@ func runPullEnv(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Determine the remote path based on --env flag
 	remotePath, err := getRemotePathForEnv(name, pullEnv, cfg, sess)
 	if err != nil {
 		return err
@@ -91,22 +90,19 @@ func runPullEnv(cmd *cobra.Command, args []string) error {
 	return pullSecretWithRemotePath(name, remotePath, sess)
 }
 
-// getRemotePathForEnv determines the remote path based on the --env flag
 func getRemotePathForEnv(name, envFlag string, cfg *config.Config, sess *session.Session) (string, error) {
-	// Get available environments from config
+
 	environments := cfg.Environments
 	if len(environments) == 0 {
 		environments = []string{"production"}
 	}
 
-	// Case 1: --env is specified
 	if envFlag != "" {
-		// --env=all shows interactive selector for environments
+
 		if envFlag == "all" {
 			return selectEnvironmentAndBuildPath(name, environments)
 		}
 
-		// Validate that the specified environment exists
 		validEnv := false
 		for _, e := range environments {
 			if e == envFlag {
@@ -118,14 +114,11 @@ func getRemotePathForEnv(name, envFlag string, cfg *config.Config, sess *session
 			return "", fmt.Errorf("unknown environment: %s (available: %v)", envFlag, environments)
 		}
 
-		// Build path for specific environment: envs/{env}/{name}.vty
 		return fmt.Sprintf("envs/%s/%s.vty", envFlag, name), nil
 	}
 
-	// Case 2: No --env specified, try shared root first
 	sharedPath := fmt.Sprintf("envs/%s.vty", name)
 
-	// Try to access shared root first
 	owner, repo, err := github.ParseRepo(cfg.Repo)
 	if err != nil {
 		return "", fmt.Errorf("parsing repo: %w", err)
@@ -142,16 +135,14 @@ func getRemotePathForEnv(name, envFlag string, cfg *config.Config, sess *session
 
 	_, err = client.GetContent(ctx, owner, repo, sharedPath)
 	if err == nil {
-		// Shared root exists, use it
+
 		return sharedPath, nil
 	}
 
-	// Shared root doesn't exist, show environment selector
 	logger.Info("No shared secrets found, showing environment selector...")
 	return selectEnvironmentAndBuildPath(name, environments)
 }
 
-// selectEnvironmentAndBuildPath shows an interactive selector for environments
 func selectEnvironmentAndBuildPath(name string, environments []string) (string, error) {
 	if !pullInteractive {
 		return "", fmt.Errorf("secret not found in shared location and no environment specified (use --env or -e flag, or -i for interactive mode)")
@@ -179,7 +170,6 @@ func selectEnvironmentAndBuildPath(name string, environments []string) (string, 
 	return fmt.Sprintf("envs/%s/%s.vty", selectedEnv, name), nil
 }
 
-// pullSecretWithRemotePath downloads and decrypts a secret given its remote path
 func pullSecretWithRemotePath(name, remotePath string, sess *session.Session) error {
 	cfg, err := config.Load("")
 	if err != nil {
