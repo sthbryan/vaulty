@@ -14,12 +14,13 @@ const (
 )
 
 type SecretMetadata struct {
-	Name      string     `json:"name"`
-	Type      SecretType `json:"type"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-	Size      int64      `json:"size"`
-	Checksum  string     `json:"checksum"`
+	Name        string     `json:"name"`
+	Type        SecretType `json:"type"`
+	Environment string     `json:"environment"` // empty = shared/all
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	Size        int64      `json:"size"`
+	Checksum    string     `json:"checksum"`
 }
 
 type VaultFile struct {
@@ -28,9 +29,10 @@ type VaultFile struct {
 }
 
 type SecretInfo struct {
-	Name      string     `json:"name"`
-	Type      SecretType `json:"type"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-	Size      int64      `json:"size"`
+	Name        string     `json:"name"`
+	Type        SecretType `json:"type"`
+	Environment string     `json:"environment"` // empty = shared/all
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	Size        int64      `json:"size"`
 }
