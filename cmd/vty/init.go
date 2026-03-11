@@ -199,36 +199,66 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 	fmt.Println(ui.InfoStyle.Render("🌍 Define your environments"))
 	fmt.Println()
 
-	var environmentsInput string
-	err = huh.NewInput().
-		Title("Environments").
-		Placeholder("production, staging, development").
-		Value(&environmentsInput).
-		Validate(func(s string) error {
-			if s == "" {
-				return fmt.Errorf("at least one environment is required")
-			}
-			return nil
-		}).
+	var selectedEnvs []string
+	err = huh.NewMultiSelect[string]().
+		Title("Select environments (select multiple)").
+		Options(
+			huh.NewOption("production", "production"),
+			huh.NewOption("staging", "staging"),
+			huh.NewOption("development", "development"),
+			huh.NewOption("test", "test"),
+			huh.NewOption("local", "local"),
+		).
+		Value(&selectedEnvs).
 		Run()
 	if err != nil {
 		return fmt.Errorf("form cancelled")
 	}
 
-	var environments []string
-	if strings.TrimSpace(environmentsInput) == "" {
-		environments = []string{"production"}
-	} else {
-		envParts := strings.Split(environmentsInput, ",")
+	var customOption string
+	err = huh.NewSelect[string]().
+		Title("Add custom environments?").
+		Options(
+			huh.NewOption("No", "no"),
+			huh.NewOption("Yes", "yes"),
+		).
+		Value(&customOption).
+		Run()
+	if err != nil {
+		return fmt.Errorf("form cancelled")
+	}
+
+	if customOption == "yes" {
+		var customInput string
+		err = huh.NewInput().
+			Title("Enter custom environments (comma-separated)").
+			Placeholder("qa, uat, demo").
+			Value(&customInput).
+			Run()
+		if err != nil {
+			return fmt.Errorf("form cancelled")
+		}
+
+		envParts := strings.Split(customInput, ",")
 		for _, e := range envParts {
 			e = strings.TrimSpace(e)
 			if e != "" {
-				environments = append(environments, e)
+				exists := false
+				for _, existing := range selectedEnvs {
+					if existing == e {
+						exists = true
+						break
+					}
+				}
+				if !exists {
+					selectedEnvs = append(selectedEnvs, e)
+				}
 			}
 		}
-		if len(environments) == 0 {
-			environments = []string{"production"}
-		}
+	}
+
+	if len(selectedEnvs) == 0 {
+		selectedEnvs = []string{"production"}
 	}
 
 	fmt.Println()
@@ -447,7 +477,7 @@ func initializeNewRepo(ctx context.Context, client *github.Client, owner, repo s
 	fmt.Println()
 
 	cfg.Metadata = metadata
-	cfg.Environments = environments
+	cfg.Environments = selectedEnvs
 
 	if err := cfg.Save(""); err != nil {
 		return fmt.Errorf("saving config: %w", err)
