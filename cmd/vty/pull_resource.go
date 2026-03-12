@@ -141,16 +141,20 @@ func runPullResourceOrConfig(name, baseDir string) error {
 	}
 
 	if isDirectory {
-		parentDir := filepath.Dir(outputFile)
-		if err := os.MkdirAll(parentDir, 0755); err != nil {
-			return fmt.Errorf("creating parent directory: %w", err)
+		targetDir := outputFile
+		if pullOutput == "" {
+			targetDir = filepath.Join(filepath.Dir(outputFile), name)
 		}
-		if err := compress.DecompressDirectory(plaintext, outputFile); err != nil {
+
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
+		}
+		if err := compress.DecompressDirectory(plaintext, targetDir); err != nil {
 			return fmt.Errorf("decompressing directory: %w", err)
 		}
-		logger.Info("💾 Saved", "path", outputFile, "type", "directory")
+		logger.Info("💾 Saved", "path", targetDir, "type", "directory")
 		fmt.Println()
-		fmt.Println(ui.SuccessStyle.Render(fmt.Sprintf("✅ Pulled directory: %s", outputFile)))
+		fmt.Println(ui.SuccessStyle.Render(fmt.Sprintf("✅ Pulled directory: %s", targetDir)))
 	} else {
 		if _, err := os.Stat(outputFile); err == nil {
 			if pullInteractive {
