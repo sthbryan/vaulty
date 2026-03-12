@@ -130,9 +130,12 @@ func runPullResourceOrConfig(name, baseDir string) error {
 
 	isDirectory := vaultFile.Metadata.IsDirectory
 
-	plaintext, err := compress.Decompress(vaultFile.Data)
-	if err != nil {
-		return fmt.Errorf("decompressing data: %w", err)
+	var plaintext []byte
+	if isDirectory {
+		ui.PrintInfo("Decompressing directory...")
+		plaintext = vaultFile.Data
+	} else {
+		plaintext = vaultFile.Data
 	}
 
 	outputFile := name

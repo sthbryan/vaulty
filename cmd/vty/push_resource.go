@@ -159,13 +159,7 @@ func prepareResourceFile(path, name string, secretType models.SecretType, isDire
 
 	ui.PrintStats("Original size: %s", ui.FormatBytes(originalSize))
 
-	ui.PrintInfo("Compressing...")
-	compressed, err := compress.Compress(content)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to compress: %w", err)
-	}
-
-	compressedSize := int64(len(compressed))
+	compressedSize := int64(len(content))
 	ui.PrintStats("Compressed size: %s (%.1f%% reduction)",
 		ui.FormatBytes(compressedSize),
 		float64(originalSize-compressedSize)/float64(originalSize)*100)
@@ -185,7 +179,7 @@ func prepareResourceFile(path, name string, secretType models.SecretType, isDire
 			Size:        originalSize,
 			Checksum:    checksum,
 		},
-		Data: compressed,
+		Data: content,
 	}
 
 	return vaultFile, originalSize, nil
