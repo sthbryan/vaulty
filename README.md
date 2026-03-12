@@ -147,6 +147,8 @@ Quick reference. See **[USAGE.md](USAGE.md)** for complete details on all flags 
 |---------|---------|
 | `vty init` | Initialize vault with GitHub repository |
 | `vty login` / `vty logout` | Manage sessions |
+| `vty link` | Link to existing vault repository |
+| `vty unlink` | Unlink current repository |
 | `vty push env <name> <path>` | Upload environment file |
 | `vty push ssh <name> <path>` | Upload SSH key |
 | `vty push resource <name> <path>` | Upload file/directory to resources |
@@ -156,10 +158,14 @@ Quick reference. See **[USAGE.md](USAGE.md)** for complete details on all flags 
 | `vty pull resource <name>` | Download file/directory from resources |
 | `vty pull config <name>` | Download file/directory from config |
 | `vty info` | Show vault contents |
+| `vty delete env <name>` | Delete environment |
+| `vty delete ssh <name>` | Delete SSH key |
+| `vty delete resource <name>` | Delete resource |
+| `vty delete config <name>` | Delete config |
 | `vty add-user <user>` | Add team member (owner only) |
 | `vty remove-user <user>` | Remove user and rotate keys (owner only) |
-| `vty transfer-owner <user>` | Transfer ownership |
-| `vty recover --seed "..."` | Recover vault using seed phrase |
+| `vty transfer-owner <user>` | Transfer ownership (owner only) |
+| `vty recover --user <user> --seed "..."` | Recover vault using seed phrase |
 | `vty config cache-duration [time]` | Configure password cache |
 
 ---
