@@ -149,8 +149,12 @@ Quick reference. See **[USAGE.md](USAGE.md)** for complete details on all flags 
 | `vty login` / `vty logout` | Manage sessions |
 | `vty push env <name> <path>` | Upload environment file |
 | `vty push ssh <name> <path>` | Upload SSH key |
+| `vty push resource <name> <path>` | Upload file/directory to resources |
+| `vty push config <name> <path>` | Upload file/directory to config |
 | `vty pull env <name>` | Download environment file |
 | `vty pull ssh <name>` | Download SSH key |
+| `vty pull resource <name>` | Download file/directory from resources |
+| `vty pull config <name>` | Download file/directory from config |
 | `vty info` | Show vault contents |
 | `vty add-user <user>` | Add team member (owner only) |
 | `vty remove-user <user>` | Remove user and rotate keys (owner only) |
@@ -174,7 +178,7 @@ Vaulty stores config at `~/.vty/config.json`. Key settings:
 
 ### High Priority
 - [x] **Environments** — Native support for develop, staging, and production with isolation
-- [ ] **Team Resources** — Share encrypted docs, agents.md, utilities
+- [x] **Team Resources** — Share encrypted docs, agents.md, utilities, .config
 - [ ] **CI/CD Integration** — Inject secrets into pipelines without .env files
 
 ### Medium Priority
