@@ -98,6 +98,71 @@ func listEnvSecrets(ctx context.Context, client *github.Client, owner, repo, env
 	return secrets, nil
 }
 
+type ResourceInfo struct {
+	Name        string
+	Type        models.SecretType
+	Tag         string
+	IsEncrypted bool
+	IsDirectory bool
+	Size        int64
+}
+
+func listResources(ctx context.Context, client *github.Client, owner, repo, baseDir string) ([]ResourceInfo, error) {
+	resources, err := listResourcesInDir(ctx, client, owner, repo, baseDir)
+	if err != nil {
+		return nil, err
+	}
+
+	subdirs, err := client.ListDirectory(ctx, owner, repo, baseDir)
+	if err != nil {
+		return resources, nil
+	}
+
+	for _, subdir := range subdirs {
+		if subdir.Type == "dir" {
+			tagResources, err := listResourcesInDir(ctx, client, owner, repo, fmt.Sprintf("%s/%s", baseDir, subdir.Name))
+			if err != nil {
+				continue
+			}
+			for i := range tagResources {
+				tagResources[i].Tag = subdir.Name
+			}
+			resources = append(resources, tagResources...)
+		}
+	}
+
+	return resources, nil
+}
+
+func listResourcesInDir(ctx context.Context, client *github.Client, owner, repo, dir string) ([]ResourceInfo, error) {
+	items, err := client.ListDirectory(ctx, owner, repo, dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var resources []ResourceInfo
+	for _, item := range items {
+		if strings.HasSuffix(item.Name, ".vty") {
+			name := strings.TrimSuffix(item.Name, ".vty")
+			var secretType models.SecretType
+			if strings.HasPrefix(dir, "resources") {
+				secretType = models.SecretTypeResource
+			} else {
+				secretType = models.SecretTypeConfig
+			}
+
+			resources = append(resources, ResourceInfo{
+				Name:        name,
+				Type:        secretType,
+				IsEncrypted: false,
+				Size:        int64(item.Size),
+			})
+		}
+	}
+
+	return resources, nil
+}
+
 func listSecretsByEnvironment(ctx context.Context, client *github.Client, cfg *config.Config, owner, repo string, masterKey []byte) ([]models.SecretInfo, error) {
 	var allSecrets []models.SecretInfo
 
@@ -198,36 +263,17 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	}
 	secrets = append(secrets, envSecrets...)
 
-	if sess.Role == "owner" {
-		sshKeys, err = client.ListAllSSHKeys(ctx, owner, repo)
-	} else {
-		sshKeys, err = client.ListSSHKeys(ctx, owner, repo, sess.Username)
-	}
+	resources, err := listResources(ctx, client, owner, repo, "resources")
 	if err == nil {
-		for _, key := range sshKeys {
-
-			path := fmt.Sprintf("ssh/%s/%s.vty", key.Username, key.KeyName)
-			decryptedContent, decryptErr := fetchAndDecryptVtyFile(ctx, client, owner, repo, path, sess.MasterKey)
-
-			var size int64
-			if decryptErr == nil {
-				size = int64(len(decryptedContent))
-			} else {
-				size = int64(key.Size)
-				logger.Debug("Could not decrypt SSH key", "name", key.KeyName, "error", decryptErr)
-			}
-
-			secrets = append(secrets, models.SecretInfo{
-				Name:      key.KeyName,
-				Type:      models.SecretTypeSSH,
-				CreatedAt: time.Time{},
-				UpdatedAt: time.Time{},
-				Size:      size,
-			})
-		}
+		logger.Info("Listed resources", "count", len(resources))
 	}
 
-	if len(secrets) == 0 {
+	configs, err := listResources(ctx, client, owner, repo, "config")
+	if err == nil {
+		logger.Info("Listed configs", "count", len(configs))
+	}
+
+	if len(resources) == 0 && len(configs) == 0 && len(secrets) == 0 {
 		fmt.Println()
 		fmt.Println(ui.InfoStyle.Render("No secrets found in vault"))
 		return nil
@@ -240,11 +286,11 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		return secrets[i].Type < secrets[j].Type
 	})
 
-	renderDetailedVaultInfo(cfg, sess, secrets, sshKeys, cfg.UpdatedAt)
+	renderDetailedVaultInfo(cfg, sess, secrets, sshKeys, resources, configs, cfg.UpdatedAt)
 	return nil
 }
 
-func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets []models.SecretInfo, sshKeys []github.SSHKeyInfo, lastSync time.Time) {
+func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets []models.SecretInfo, sshKeys []github.SSHKeyInfo, resources []ResourceInfo, configs []ResourceInfo, lastSync time.Time) {
 	fmt.Println()
 
 	fmt.Println(ui.MutedStyle.Render("User: " + sess.Username + " (" + sess.Role + ")"))
@@ -303,6 +349,18 @@ func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets 
 	if len(sshKeys) > 0 {
 		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== SSH KEYS ==="))
 		renderSSHKeysTable(sshKeys, sess.Role)
+		fmt.Println()
+	}
+
+	if len(resources) > 0 {
+		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== RESOURCES ==="))
+		renderResourcesTable(resources)
+		fmt.Println()
+	}
+
+	if len(configs) > 0 {
+		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== CONFIG ==="))
+		renderResourcesTable(configs)
 		fmt.Println()
 	}
 
@@ -478,6 +536,47 @@ func renderSSHKeysTable(keys []github.SSHKeyInfo, role string) {
 
 		fmt.Println(t.Render())
 	}
+}
+
+func renderResourcesTable(resources []ResourceInfo) {
+	t := table.New().
+		Border(lipgloss.NormalBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == 0 {
+				return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary))
+			}
+			if row%2 == 0 {
+				return lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+			}
+			return lipgloss.NewStyle()
+		}).
+		Headers("NAME", "TYPE", "TAG", "ENCRYPTED", "DIR", "SIZE")
+
+	for _, r := range resources {
+		tag := r.Tag
+		if tag == "" {
+			tag = "-"
+		}
+		encrypted := "no"
+		if r.IsEncrypted {
+			encrypted = "yes"
+		}
+		dir := "no"
+		if r.IsDirectory {
+			dir = "yes"
+		}
+		t.Row(
+			r.Name,
+			string(r.Type),
+			tag,
+			encrypted,
+			dir,
+			formatSize(r.Size),
+		)
+	}
+
+	fmt.Println(t.Render())
 }
 
 func formatSize(bytes int64) string {
