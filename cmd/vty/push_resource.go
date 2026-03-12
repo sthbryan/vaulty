@@ -19,23 +19,22 @@ import (
 )
 
 var (
-	pushResourceEncrypted bool
-	pushResourceTag       string
+	pushResourceTag string
 )
 
 var pushResourceCmd = &cobra.Command{
 	Use:   "resource <name> <path>",
 	Short: "Push a file or directory to resources",
-	Long: `Compress, encrypt (optional), and upload a file or directory to the resources/ directory.
+	Long: `Compress, encrypt, and upload a file or directory to the resources/ directory.
 
 The file/directory will be:
   1. Compressed using tar+gzip for efficiency
-  2. Encrypted using AES-256-GCM (if --encrypted flag is set)
-  3. Uploaded to your GitHub repository in the resources/ directory
+  2. Encrypted using AES-256-GCM
+  3. Uploaded to your GitHub repository as .vty file
 
 Examples:
   vty push resource agents ./AGENTS.md
-  vty push resource zellij ~/.config/zellij --encrypted --tag dev
+  vty push resource zellij ~/.config/zellij --tag dev
   vty push resource config.yml ./config.yml --tag team`,
 	Args: cobra.ExactArgs(2),
 	RunE: runPushResource,
@@ -44,16 +43,16 @@ Examples:
 var pushConfigCmd = &cobra.Command{
 	Use:   "config <name> <path>",
 	Short: "Push a file or directory to config",
-	Long: `Compress, encrypt (optional), and upload a file or directory to the config/ directory.
+	Long: `Compress, encrypt, and upload a file or directory to the config/ directory.
 
 The file/directory will be:
   1. Compressed using tar+gzip for efficiency
-  2. Encrypted using AES-256-GCM (if --encrypted flag is set)
-  3. Uploaded to your GitHub repository in the config/ directory
+  2. Encrypted using AES-256-GCM
+  3. Uploaded to your GitHub repository as .vty file
 
 Examples:
   vty push config opencode ~/.config/opencode
-  vty push config zellij ~/.config/zellij --encrypted --tag team`,
+  vty push config zellij ~/.config/zellij --tag team`,
 	Args: cobra.ExactArgs(2),
 	RunE: runPushConfig,
 }
@@ -107,25 +106,12 @@ func runPushResourceOrConfig(name, path string, secretType models.SecretType, ba
 
 	var remotePath string
 	if pushResourceTag != "" {
-		if pushResourceEncrypted {
-			remotePath = fmt.Sprintf("%s/%s/%s.vty", baseDir, pushResourceTag, name)
-		} else {
-			remotePath = fmt.Sprintf("%s/%s/%s", baseDir, pushResourceTag, name)
-		}
+		remotePath = fmt.Sprintf("%s/%s/%s.vty", baseDir, pushResourceTag, name)
 	} else {
-		if pushResourceEncrypted {
-			remotePath = fmt.Sprintf("%s/%s.vty", baseDir, name)
-		} else {
-			remotePath = fmt.Sprintf("%s/%s", baseDir, name)
-		}
+		remotePath = fmt.Sprintf("%s/%s.vty", baseDir, name)
 	}
 
-	var encryptedSize int
-	if pushResourceEncrypted {
-		encryptedSize, err = encryptAndUploadResource(client, cfg, remotePath, vaultFile, sess.MasterKey, name)
-	} else {
-		encryptedSize, err = uploadResourcePlain(client, cfg, remotePath, vaultFile, name)
-	}
+	encryptedSize, err := encryptAndUploadResource(client, cfg, remotePath, vaultFile, sess.MasterKey, name)
 	if err != nil {
 		return err
 	}
@@ -135,7 +121,7 @@ func runPushResourceOrConfig(name, path string, secretType models.SecretType, ba
 	fmt.Printf("  Name:      %s\n", name)
 	fmt.Printf("  Type:      %s\n", secretType)
 	fmt.Printf("  Path:      %s\n", remotePath)
-	fmt.Printf("  Encrypted: %v\n", pushResourceEncrypted)
+	fmt.Printf("  Encrypted: true\n")
 	fmt.Printf("  Directory: %v\n", isDirectory)
 	if pushResourceTag != "" {
 		fmt.Printf("  Tag:       %s\n", pushResourceTag)
@@ -192,7 +178,7 @@ func prepareResourceFile(path, name string, secretType models.SecretType, isDire
 			Name:        name,
 			Type:        secretType,
 			Tag:         pushResourceTag,
-			IsEncrypted: pushResourceEncrypted,
+			IsEncrypted: true,
 			IsDirectory: isDirectory,
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
@@ -223,23 +209,6 @@ func encryptAndUploadResource(client *github.Client, cfg *config.Config, remoteP
 	}
 
 	return len(hexEncrypted), nil
-}
-
-func uploadResourcePlain(client *github.Client, cfg *config.Config, remotePath string, vaultFile *ResourceVaultFile, name string) (int, error) {
-	ui.PrintInfo("Compressing (no encryption)...")
-
-	compressed, err := compress.Compress(vaultFile.Data)
-	if err != nil {
-		return 0, fmt.Errorf("failed to compress: %w", err)
-	}
-
-	encoded := base64.StdEncoding.EncodeToString(compressed)
-
-	if err := uploadResourceToGitHub(client, cfg, remotePath, []byte(encoded), name); err != nil {
-		return 0, err
-	}
-
-	return len(encoded), nil
 }
 
 func uploadResourceToGitHub(client *github.Client, cfg *config.Config, remotePath string, vaultData []byte, name string) error {
@@ -291,11 +260,9 @@ func uploadResourceToGitHub(client *github.Client, cfg *config.Config, remotePat
 }
 
 func init() {
-	pushResourceCmd.Flags().BoolVarP(&pushResourceEncrypted, "encrypted", "E", false, "Encrypt the resource")
 	pushResourceCmd.Flags().StringVarP(&pushResourceTag, "tag", "t", "", "Tag for organizing resources (e.g., dev, team)")
 	pushResourceCmd.Flags().BoolVarP(&pushForce, "force", "f", false, "Overwrite without prompting")
 
-	pushConfigCmd.Flags().BoolVarP(&pushResourceEncrypted, "encrypted", "E", false, "Encrypt the config")
 	pushConfigCmd.Flags().StringVarP(&pushResourceTag, "tag", "t", "", "Tag for organizing configs (e.g., dev, team)")
 	pushConfigCmd.Flags().BoolVarP(&pushForce, "force", "f", false, "Overwrite without prompting")
 

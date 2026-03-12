@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/DeadBryam/vaulty/internal/compress"
@@ -70,19 +69,10 @@ func runPullResourceOrConfig(name, baseDir string) error {
 	}
 
 	var remotePath string
-	isEncryptedFile := pushResourceEncrypted
-	if pushResourceTag != "" {
-		if isEncryptedFile {
-			remotePath = fmt.Sprintf("%s/%s/%s.vty", baseDir, pushResourceTag, name)
-		} else {
-			remotePath = fmt.Sprintf("%s/%s/%s", baseDir, pushResourceTag, name)
-		}
+	if pullResourceTag != "" {
+		remotePath = fmt.Sprintf("%s/%s/%s.vty", baseDir, pullResourceTag, name)
 	} else {
-		if isEncryptedFile {
-			remotePath = fmt.Sprintf("%s/%s.vty", baseDir, name)
-		} else {
-			remotePath = fmt.Sprintf("%s/%s", baseDir, name)
-		}
+		remotePath = fmt.Sprintf("%s/%s.vty", baseDir, name)
 	}
 
 	owner, repo, err := github.ParseRepo(cfg.Repo)
@@ -113,8 +103,9 @@ func runPullResourceOrConfig(name, baseDir string) error {
 		return fmt.Errorf("decoding content: %w", err)
 	}
 
-	hexData := string(encodedData)
-	decoded, err := base64.StdEncoding.DecodeString(hexData)
+	logger.Info("🔓 Decrypting...")
+
+	decoded, err := base64.StdEncoding.DecodeString(string(encodedData))
 	if err != nil {
 		return fmt.Errorf("decoding base64: %w", err)
 	}
@@ -124,38 +115,24 @@ func runPullResourceOrConfig(name, baseDir string) error {
 		return fmt.Errorf("decompressing: %w", err)
 	}
 
-	var plaintext []byte
-	var isDirectory bool
-
-	if isEncryptedFile || strings.HasSuffix(remotePath, ".vty") {
-		logger.Info("🔓 File is encrypted (.vty), decrypting...")
-
-		vaultJSON, err := crypto.DecryptBinary(string(decompressed), sess.MasterKey)
-		if err != nil {
-			if err == crypto.ErrDecryptionFailed {
-				return fmt.Errorf("decryption failed: invalid password")
-			}
-			return fmt.Errorf("decrypting: %w", err)
+	vaultJSON, err := crypto.DecryptBinary(string(decompressed), sess.MasterKey)
+	if err != nil {
+		if err == crypto.ErrDecryptionFailed {
+			return fmt.Errorf("decryption failed: invalid password")
 		}
+		return fmt.Errorf("decrypting: %w", err)
+	}
 
-		var vaultFile ResourceVaultFile
-		if err := json.Unmarshal(vaultJSON, &vaultFile); err != nil {
-			return fmt.Errorf("parsing vault file: %w", err)
-		}
+	var vaultFile ResourceVaultFile
+	if err := json.Unmarshal(vaultJSON, &vaultFile); err != nil {
+		return fmt.Errorf("parsing vault file: %w", err)
+	}
 
-		isDirectory = vaultFile.Metadata.IsDirectory
+	isDirectory := vaultFile.Metadata.IsDirectory
 
-		plaintext, err = compress.Decompress(vaultFile.Data)
-		if err != nil {
-			return fmt.Errorf("decompressing data: %w", err)
-		}
-	} else {
-		logger.Info("📄 File is raw (no encryption), decompressing...")
-
-		ext := filepath.Ext(name)
-		isDirectory = ext == ""
-
-		plaintext = decompressed
+	plaintext, err := compress.Decompress(vaultFile.Data)
+	if err != nil {
+		return fmt.Errorf("decompressing data: %w", err)
 	}
 
 	outputFile := name
@@ -212,9 +189,6 @@ func runPullResourceOrConfig(name, baseDir string) error {
 		fmt.Println(ui.SuccessStyle.Render(fmt.Sprintf("✅ Pulled: %s", outputFile)))
 	}
 
-	if isEncryptedFile || strings.HasSuffix(remotePath, ".vty") {
-		fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("   Encrypted: yes")))
-	}
 	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("   Directory: %v", isDirectory)))
 
 	return nil
