@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -105,17 +104,7 @@ func runPullResourceOrConfig(name, baseDir string) error {
 
 	logger.Info("🔓 Decrypting...")
 
-	decoded, err := base64.StdEncoding.DecodeString(string(encodedData))
-	if err != nil {
-		return fmt.Errorf("decoding base64: %w", err)
-	}
-
-	decompressed, err := compress.Decompress(decoded)
-	if err != nil {
-		return fmt.Errorf("decompressing: %w", err)
-	}
-
-	vaultJSON, err := crypto.DecryptBinary(string(decompressed), sess.MasterKey)
+	vaultJSON, err := crypto.DecryptBinary(string(encodedData), sess.MasterKey)
 	if err != nil {
 		if err == crypto.ErrDecryptionFailed {
 			return fmt.Errorf("decryption failed: invalid password")
