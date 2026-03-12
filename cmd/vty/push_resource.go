@@ -107,9 +107,17 @@ func runPushResourceOrConfig(name, path string, secretType models.SecretType, ba
 
 	var remotePath string
 	if pushResourceTag != "" {
-		remotePath = fmt.Sprintf("%s/%s/%s.vty", baseDir, pushResourceTag, name)
+		if pushResourceEncrypted {
+			remotePath = fmt.Sprintf("%s/%s/%s.vty", baseDir, pushResourceTag, name)
+		} else {
+			remotePath = fmt.Sprintf("%s/%s/%s", baseDir, pushResourceTag, name)
+		}
 	} else {
-		remotePath = fmt.Sprintf("%s/%s.vty", baseDir, name)
+		if pushResourceEncrypted {
+			remotePath = fmt.Sprintf("%s/%s.vty", baseDir, name)
+		} else {
+			remotePath = fmt.Sprintf("%s/%s", baseDir, name)
+		}
 	}
 
 	var encryptedSize int
@@ -218,14 +226,9 @@ func encryptAndUploadResource(client *github.Client, cfg *config.Config, remoteP
 }
 
 func uploadResourcePlain(client *github.Client, cfg *config.Config, remotePath string, vaultFile *ResourceVaultFile, name string) (int, error) {
-	ui.PrintInfo("Encoding without encryption...")
+	ui.PrintInfo("Compressing (no encryption)...")
 
-	vaultData, err := json.Marshal(vaultFile)
-	if err != nil {
-		return 0, fmt.Errorf("failed to marshal vault file: %w", err)
-	}
-
-	compressed, err := compress.Compress(vaultData)
+	compressed, err := compress.Compress(vaultFile.Data)
 	if err != nil {
 		return 0, fmt.Errorf("failed to compress: %w", err)
 	}
