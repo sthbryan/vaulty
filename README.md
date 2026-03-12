@@ -67,18 +67,11 @@ go install github.com/DeadBryam/vaulty/cmd/vty@latest
 ### Build from Source
 
 ```bash
-# Clone the repository
 git clone https://github.com/DeadBryam/vaulty.git
 cd vaulty
-
-# Build for current platform
-make build
-
-# Or build for all platforms
-make build-all
-
-# Install to $GOPATH/bin
-make install
+make build        # Build for current platform
+make build-all    # Build for all platforms
+make install      # Install to $GOPATH/bin
 ```
 
 Verify installation:
@@ -91,253 +84,118 @@ vty --version
 
 ## Quick Start
 
+See **[USAGE.md](USAGE.md#configuration)** for full details.
+
 ### 1. Initialize Vaulty
 
 ```bash
 vty init
 ```
 
-This will:
-- Prompt for your username and master password
-- Create or link to an existing private repository
-- Generate a masterKey (never stored locally)
-- Generate a 12-word recovery seed phrase
-- Set up your vault with owner role
+Creates your vault and generates a recovery seed phrase. **Save it securely** — you'll need it if you forget your password.
 
-**Important:** Save your recovery seed phrase securely. You will need it if you forget your master password.
-
-### 2. Add Team Members (Multi-User)
-
-As the vault owner, add collaborators:
+### 2. Add Team Members (Optional)
 
 ```bash
 vty add-user pablo
 ```
 
-This will:
-- Ask for your password (to verify ownership)
-- Prompt for pablo's password
-- Generate pablo's recovery seed phrase
-- Set pablo's role (viewer by default, can be changed)
+Owner can add collaborators and assign roles (Owner, Editor, Viewer).
 
-### 3. Login to the Vault
-
-Team members login to access secrets:
+### 3. Login (Multi-User)
 
 ```bash
 vty login
 ```
 
-This will:
-- Ask for username and password
-- Decrypt their copy of the masterKey
-- Create a session (valid for 24h or until logout)
+Creates a session (valid 24h or until logout). After `vty init`, you're automatically logged in.
 
-**Note:** After `vty init`, you're automatically logged in — no need to run `vty login`.
+### 4. Push Secrets
 
-### 4. Push Environment Files
+Push environment files and SSH keys:
 
 ```bash
-vty push env production .env.production
+vty push env production .env.production    # Push environment file
+vty push ssh laptop ~/.ssh/id_rsa          # Push SSH key
 ```
 
-This compresses, encrypts, and uploads your environment file to GitHub in the `envs/` directory. Only works when logged in.
+### 5. Pull Secrets
 
-### 5. Pull Environment Files
+Pull and decrypt from GitHub:
 
 ```bash
-vty pull env production
+vty pull env production                    # Download environment file
+vty pull ssh laptop                        # Download SSH key
 ```
 
-Download and decrypt the environment file to your current directory.
-
-### 6. Push/Pull SSH Keys
-
-Store SSH keys securely per-user:
+### 6. Vault Info & Management
 
 ```bash
-# Push an SSH key
-vty push ssh laptop ~/.ssh/id_rsa
-
-# Pull an SSH key
-vty pull ssh laptop
+vty info                                   # Show vault contents
+vty delete env production                  # Delete environment
+vty delete ssh laptop                      # Delete SSH key
+vty logout                                 # Clear session
 ```
-
-SSH keys are stored per-user in `ssh/{username}/` — you only see your own SSH keys (owner sees all).
 
 ---
 
 ## Commands
 
-### Vault Management
+Quick reference. See **[USAGE.md](USAGE.md)** for complete details on all flags and subcommands.
 
-| Command | Description | Example |
-|---------|-------------|---------|
-| `vty init` | Initialize or link to a GitHub repository | `vty init` |
-| `vty login` | Login and create session (multi-user) | `vty login` |
-| `vty lock` | Lock vault without logging out | `vty lock` |
-| `vty logout` | Clear stored master password | `vty logout` |
-| `vty unlink` | Unlink Vaulty (keeps GitHub data) | `vty unlink` |
-
-### Secret Management
-
-| Command | Description | Example |
-|---------|-------------|---------|
-| `vty push env <name> <path>` | Push environment file to vault | `vty push env api .env` |
-| `vty push ssh <name> <path>` | Push SSH key to vault | `vty push ssh work ~/.ssh/id_rsa` |
-| `vty pull env <name>` | Pull and decrypt environment file | `vty pull env api` |
-| `vty pull ssh <name>` | Pull and decrypt SSH key | `vty pull ssh work` |
-| `vty info` | Show vault info (envs, SSH keys, users) | `vty info` |
-| `vty delete env <name>` | Delete environment file from vault | `vty delete env api` |
-| `vty delete ssh <name>` | Delete SSH key from vault | `vty delete ssh work` |
-
-### Multi-User Management
-
-| Command | Description | Example |
-|---------|-------------|---------|
-| `vty add-user <username>` | Owner adds a collaborator (requires your password) | `vty add-user pablo` |
-| `vty remove-user <username>` | Owner removes a user and rotates masterKey | `vty remove-user pablo` |
-| `vty transfer-owner <username>` | Transfer ownership to another user | `vty transfer-owner pablo` |
-
-### Recovery & Configuration
-
-| Command | Description | Example |
-|---------|-------------|---------|
-| `vty recover --seed "..."` | Recover vault using seed phrase | `vty recover --seed "word1 word2 ..."` |
-| `vty config cache-duration [duration]` | Get/set password cache duration | `vty config cache-duration 30m` |
-
----
-
-## Security
-
-Vaulty takes security seriously:
-
-- **Encryption** — AES-256-GCM with randomly generated salts and IVs
-- **Key Derivation** — PBKDF2 with 100,000 iterations
-- **Device Salt** — Unique per-machine salt for additional security
-- **MasterKey** — Single encryption key for all vault data, never stored on disk (memory-only during session)
-- **Per-User Keys** — Each user's password encrypts their copy of the masterKey
-- **Password Storage** — OS keyring (macOS Keychain, Linux Secret Service, Windows Credential Manager) with memory cache fallback
-- **No Plaintext** — Secrets are never stored in plaintext locally or on GitHub
-- **Recovery** — BIP39 seed phrase per user for password recovery without exposing secrets
-- **Automatic Key Rotation** — MasterKey rotated when users are removed, all remaining users re-encrypted
-
-### Multi-User Security
-
-- **Role-Based Access** — Owner (admin), Editor (write), Viewer (read-only)
-- **Auto-Unlink** — User automatically unlinked if removed from vault during operations
-- **Cached Encryption** — Vault cached locally with 24h TTL, encrypted with user password
-- **Session Management** — MasterKey loaded only during session, locked/cleared on logout
-- **Per-User SSH Keys** — SSH keys stored per-user in `ssh/{username}/` — users only see their own keys (owner sees all)
-
-### Password Cache
-
-By default, Vaulty caches your password in memory for 15 minutes to avoid repeated prompts. You can configure this:
-
-```bash
-# Set cache duration (1m to 24h)
-vty config cache-duration 30m
-
-# Disable cache (always prompt)
-vty config cache-duration 0
-
-# Maximum cache (24 hours)
-vty config cache-duration 24h
-```
-
-### Recovery
-
-If you forget your master password, use your 12-word recovery seed phrase:
-
-```bash
-vty recover --seed "your twelve word seed phrase here"
-```
-
-You will be prompted to set a new master password. The recovery process validates your seed against the vault without exposing any secrets.
+| Command | Purpose |
+|---------|---------|
+| `vty init` | Initialize vault with GitHub repository |
+| `vty login` / `vty logout` | Manage sessions |
+| `vty push env <name> <path>` | Upload environment file |
+| `vty push ssh <name> <path>` | Upload SSH key |
+| `vty pull env <name>` | Download environment file |
+| `vty pull ssh <name>` | Download SSH key |
+| `vty info` | Show vault contents |
+| `vty add-user <user>` | Add team member (owner only) |
+| `vty remove-user <user>` | Remove user and rotate keys (owner only) |
+| `vty transfer-owner <user>` | Transfer ownership |
+| `vty recover --seed "..."` | Recover vault using seed phrase |
+| `vty config cache-duration [time]` | Configure password cache |
 
 ---
 
 ## Configuration
 
-Configuration is stored at `~/.vty/config.json`:
+Vaulty stores config at `~/.vty/config.json`. Key settings:
 
-```json
-{
-  "repo": "owner/my-vault",
-  "device_salt": "base64-encoded-salt",
-  "current_user": "ana",
-  "current_role": "owner",
-  "cache_duration": "15m",
-  "storage_type": "auto"
-}
-```
-
-### Storage Types
-
-- `auto` — Use OS keyring if available, fallback to memory
-- `keyring` — Force OS keyring (fails if unavailable)
-- `memory` — Use memory-only storage (password cleared on logout)
-
-### GitHub Vault Structure
-
-```
-envs/
-├── production.vty          ← Encrypted + compressed environment file
-└── staging.vty
-ssh/
-├── alice/
-│   ├── laptop.vty         ← Encrypted + compressed SSH private key
-│   └── work.vty
-└── bob/
-    └── personal.vty
-.vaulty/
-├── metadata.vty           ← Compressed user list & vault info (hex/gzip)
-├── vault.vty              ← Compressed vault data (hex/gzip)
-├── keys/
-│   ├── ana.vty            ← Compressed encrypted masterKey per user
-│   └── pablo.vty
-└── recovery/
-    ├── ana.recovery.vty   ← Compressed recovery seed phrase
-    └── pablo.recovery.vty
-```
+- **repo** — GitHub repository (owner/name)
+- **storage_type** — `auto` (keyring + fallback), `keyring`, or `memory`
+- **cache_duration** — Password cache lifetime
 
 ---
 
 ## Roadmap
 
-Features planned for future releases:
-
 ### High Priority
-
-- [ ] **Environments** — Native support for develop, staging, and production environments with isolation
-- [ ] **Team Resources** — Share skills, agents.md, documentation, and utilities (encrypted or plaintext)
-- [ ] **CI/CD Integration** — Seamless injection of environment variables in pipelines without .env files on servers
+- [x] **Environments** — Native support for develop, staging, and production with isolation
+- [ ] **Team Resources** — Share encrypted docs, agents.md, utilities
+- [ ] **CI/CD Integration** — Inject secrets into pipelines without .env files
 
 ### Medium Priority
-
-- [ ] **Status Command** — Check current status: linked/unlinked, last sync, storage type, cache status
-- [ ] **Modular Downloads** — Option to download only specific secrets instead of entire vault metadata
-- [ ] **Security Mode** — Server mode that always requires password input (no caching)
-- [ ] **Config View** — Display current configuration with `vty config` (no subcommand)
+- [ ] **Status Command** — Check linked/unlinked status, last sync, cache state
+- [ ] **Modular Downloads** — Fetch specific secrets instead of entire vault
+- [ ] **Security Mode** — Server mode that always requires password input
 
 ### Low Priority
-
-- [ ] **Reset/Clean** — **DESTRUCTIVE** Complete vault reset. Removes: local config, canary, recovery data, and all secrets from GitHub. Requires seed phrase for confirmation
-
-### Ideas Under Consideration
-
-- Web interface for managing secrets
-- Audit logging for compliance
-- Secret versioning and rollback
-- Integration with external secret managers (AWS Secrets Manager, Azure Key Vault)
+- [ ] **Reset/Clean** — **DESTRUCTIVE** Vault reset (requires seed phrase confirmation)
+- [ ] **Web Interface** — GUI for managing secrets
+- [ ] **Audit Logging** — Compliance tracking
+- [ ] **Secret Versioning** — Rollback support
+- [ ] **External Integration** — AWS Secrets Manager, Azure Key Vault
 
 ---
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! See [Contributing Guide](CONTRIBUTING.md) for details.
 
-### Reporting Issues
+### Report Issues
 
 - [Bug Report](https://github.com/DeadBryam/vaulty/issues/new?template=bug_report.md)
 - [Feature Request](https://github.com/DeadBryam/vaulty/issues/new?template=feature_request.md)
