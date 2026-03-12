@@ -19,13 +19,14 @@ var logger *log.Logger
 var rootCmd = &cobra.Command{
 	Use:   "vty",
 	Short: "🔐 Vaulty - Secure environment and SSH key vault",
-	Long: `Vaulty is a secure vault for managing environment variables and SSH keys.
+	Long: `Vaulty is a secure vault for managing environment variables, SSH keys, and team resources.
 
 It provides a safe way to store, retrieve, and inject sensitive configuration
 into your development workflow. Vaulty supports:
 
   • Secure storage of environment variables
   • SSH key management and injection
+  • Team resources and config storage
   • GitHub as storage backend
   • Easy migration between machines
 
