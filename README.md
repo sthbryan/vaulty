@@ -185,18 +185,17 @@ Vaulty stores config at `~/.vty/config.json`. Key settings:
 ### High Priority
 - [x] **Environments** — Native support for develop, staging, and production with isolation
 - [x] **Team Resources** — Share encrypted docs, agents.md, utilities, .config
-- [ ] **CI/CD Integration** — Inject secrets into pipelines without .env files
+- [ ] **Local mode** — Store secrets locally without GitHub sync
 
 ### Medium Priority
-- [ ] **Status Command** — Check linked/unlinked status, last sync, cache state
+- [ ] **Web Interface** — GUI for managing secrets
 - [ ] **Modular Downloads** — Fetch specific secrets instead of entire vault
 - [ ] **Security Mode** — Server mode that always requires password input
 
 ### Low Priority
-- [ ] **Reset/Clean** — **DESTRUCTIVE** Vault reset (requires seed phrase confirmation)
-- [ ] **Web Interface** — GUI for managing secrets
+- [x] **Reset/Clean** — **DESTRUCTIVE** Vault reset (requires seed phrase confirmation)
+- [ ] **CI/CD Integration** — Inject secrets into pipelines without .env files
 - [ ] **Audit Logging** — Compliance tracking
-- [ ] **Secret Versioning** — Rollback support
 - [ ] **External Integration** — AWS Secrets Manager, Azure Key Vault
 
 ---
