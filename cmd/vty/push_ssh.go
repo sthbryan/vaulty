@@ -1,12 +1,8 @@
 package main
 
 import (
-	"context"
-	"encoding/base64"
 	"fmt"
-	"strings"
 
-	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/spf13/cobra"
@@ -20,7 +16,7 @@ func runPushSSH(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	cfg, client, err := loadConfigAndClient()
+	cfg, s, err := loadConfigAndStorage()
 	if err != nil {
 		return err
 	}
@@ -45,18 +41,11 @@ func runPushSSH(cmd *cobra.Command, args []string) error {
 
 	remotePath := fmt.Sprintf("ssh/%s/%s.vty", sess.Username, name)
 
-	ctx := context.Background()
-	owner, repoName, err := github.ParseRepo(cfg.Repo)
-	if err != nil {
-		return fmt.Errorf("invalid repo format: %w", err)
+	if !s.IsLocal() {
+		ui.PrintCloud("Ensuring SSH directory exists for user: %s", sess.Username)
 	}
 
-	ui.PrintCloud("Ensuring SSH directory exists for user: %s", sess.Username)
-	if err := ensureSSHUserDir(ctx, client, owner, repoName, sess.Username); err != nil {
-		return fmt.Errorf("failed to ensure SSH user directory: %w", err)
-	}
-
-	encryptedSize, err := encryptAndUploadBinary(client, cfg, remotePath, vaultFile, sess.MasterKey, name)
+	encryptedSize, err := encryptAndUploadWithStorage(s, cfg, remotePath, vaultFile, sess.MasterKey, name)
 	if err != nil {
 		return err
 	}
@@ -69,35 +58,10 @@ func runPushSSH(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Size:    %s → %s\n",
 		ui.FormatBytes(originalSize),
 		ui.FormatBytes(int64(encryptedSize)))
-	fmt.Printf("  Repo:    %s\n", cfg.Repo)
-
-	return nil
-}
-
-func ensureSSHUserDir(ctx context.Context, client *github.Client, owner, repo, username string) error {
-	userDir := fmt.Sprintf("ssh/%s", username)
-	placeholderPath := fmt.Sprintf("%s/.gitkeep", userDir)
-
-	_, err := client.GetContent(ctx, owner, repo, userDir)
-	if err == nil {
-		return nil
-	}
-
-	_, err = client.GetContent(ctx, owner, repo, placeholderPath)
-	if err == nil {
-		return nil
-	}
-
-	emptyContent := base64.StdEncoding.EncodeToString([]byte{})
-	req := github.ContentRequest{
-		Message: fmt.Sprintf("Create SSH directory for user: %s", username),
-		Content: emptyContent,
-	}
-
-	if err := client.PutContent(ctx, owner, repo, placeholderPath, req); err != nil {
-		if !strings.Contains(err.Error(), "422") {
-			return err
-		}
+	if cfg.IsLocalMode() {
+		fmt.Printf("  Storage: local (%s)\n", s.GetRepo())
+	} else {
+		fmt.Printf("  Repo:    %s\n", cfg.Repo)
 	}
 
 	return nil

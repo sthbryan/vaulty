@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/DeadBryam/vaulty/internal/compress"
 	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/crypto"
-	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/session"
+	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/charmbracelet/huh"
 )
@@ -27,33 +28,35 @@ func pullSecretWithRemotePath(name, remotePath string, sess *session.Session) er
 		return fmt.Errorf("invalid config: %w", err)
 	}
 
-	owner, repo, err := github.ParseRepo(cfg.Repo)
+	s, err := getStorage(cfg)
+	var _ storage.Storage = s
 	if err != nil {
-		return fmt.Errorf("parsing repo: %w", err)
+		return fmt.Errorf("failed to get storage: %w", err)
 	}
 
-	token, err := github.GetGitHubToken()
-	if err != nil {
-		return fmt.Errorf("getting GitHub token: %w", err)
-	}
-
-	client := github.NewClient(token)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	logger.Info("☁️  Downloading secrets...", "name", name)
+	logger.Info("Downloading secrets...", "name", name)
 
-	content, err := client.GetContent(ctx, owner, repo, remotePath)
+	var env, envName string
+	if strings.HasPrefix(remotePath, "envs/") {
+		parts := strings.Split(strings.TrimPrefix(remotePath, "envs/"), "/")
+		if len(parts) == 1 {
+			env = ""
+			envName = strings.TrimSuffix(parts[0], ".vty")
+		} else if len(parts) == 2 {
+			env = parts[0]
+			envName = strings.TrimSuffix(parts[1], ".vty")
+		}
+	}
+
+	encodedData, err := s.GetEnv(ctx, env, envName)
 	if err != nil {
 		return fmt.Errorf("secret not found: %s", remotePath)
 	}
 
-	logger.Info("✓ Downloaded", "path", remotePath, "size", content.Size)
-
-	encodedData, err := client.DecodeContent(content)
-	if err != nil {
-		return fmt.Errorf("decoding content: %w", err)
-	}
+	logger.Info("✓ Downloaded", "path", remotePath, "size", len(encodedData))
 
 	logger.Info("🔓 Decrypting...")
 	hexData := string(encodedData)
@@ -130,40 +133,33 @@ func pullSecretWithSession(name, secretType, targetUser string, sess *session.Se
 		return fmt.Errorf("invalid config: %w", err)
 	}
 
-	owner, repo, err := github.ParseRepo(cfg.Repo)
+	s, err := getStorage(cfg)
+	var _ storage.Storage = s
 	if err != nil {
-		return fmt.Errorf("parsing repo: %w", err)
+		return fmt.Errorf("failed to get storage: %w", err)
 	}
 
-	token, err := github.GetGitHubToken()
-	if err != nil {
-		return fmt.Errorf("getting GitHub token: %w", err)
-	}
-
-	client := github.NewClient(token)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	var path string
+	var encodedData []byte
+
 	if secretType == "env" {
 		path = fmt.Sprintf("envs/%s.vty", name)
-		logger.Info("☁️  Downloading environment secrets...", "name", name)
+		logger.Info("Downloading environment secrets...", "name", name)
+		encodedData, err = s.GetEnv(ctx, "", name)
 	} else {
 		path = fmt.Sprintf("ssh/%s/%s.vty", targetUser, name)
-		logger.Info("☁️  Downloading SSH key...", "name", name, "user", targetUser)
+		logger.Info("Downloading SSH key...", "name", name, "user", targetUser)
+		encodedData, err = s.GetSSHKey(ctx, targetUser, name)
 	}
 
-	content, err := client.GetContent(ctx, owner, repo, path)
 	if err != nil {
 		return fmt.Errorf("secret not found: %s", path)
 	}
 
-	logger.Info("✓ Downloaded", "path", path, "size", content.Size)
-
-	encodedData, err := client.DecodeContent(content)
-	if err != nil {
-		return fmt.Errorf("decoding content: %w", err)
-	}
+	logger.Info("✓ Downloaded", "path", path, "size", len(encodedData))
 
 	logger.Info("🔓 Decrypting...")
 	hexData := string(encodedData)

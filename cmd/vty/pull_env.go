@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/session"
+	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
@@ -67,21 +67,16 @@ func getRemotePathForEnv(name, envFlag string, cfg *config.Config, sess *session
 
 	sharedPath := fmt.Sprintf("envs/%s.vty", name)
 
-	owner, repo, err := github.ParseRepo(cfg.Repo)
+	s, err := getStorage(cfg)
+	var _ storage.Storage = s
 	if err != nil {
-		return "", fmt.Errorf("parsing repo: %w", err)
+		return "", fmt.Errorf("failed to get storage: %w", err)
 	}
 
-	token, err := github.GetGitHubToken()
-	if err != nil {
-		return "", fmt.Errorf("getting GitHub token: %w", err)
-	}
-
-	client := github.NewClient(token)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err = client.GetContent(ctx, owner, repo, sharedPath)
+	_, err = s.GetEnv(ctx, "", name)
 	if err == nil {
 
 		return sharedPath, nil

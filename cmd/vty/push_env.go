@@ -16,7 +16,7 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	cfg, client, err := loadConfigAndClient()
+	cfg, s, err := loadConfigAndStorage()
 	if err != nil {
 		return err
 	}
@@ -63,7 +63,7 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 		for _, env := range envs {
 			envPath := fmt.Sprintf("envs/%s/%s.vty", env, name)
 			ui.PrintInfo("Pushing to environment: %s", env)
-			if _, err := encryptAndUploadBinary(client, cfg, envPath, vaultFile, sess.MasterKey, name); err != nil {
+			if _, err := encryptAndUploadWithStorage(s, cfg, envPath, vaultFile, sess.MasterKey, name); err != nil {
 				return fmt.Errorf("failed to push to %s: %w", env, err)
 			}
 		}
@@ -74,13 +74,17 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Size:    %s → %s\n",
 			ui.FormatBytes(originalSize),
 			ui.FormatBytes(int64(len(vaultFile.Data)*2)))
-		fmt.Printf("  Repo:    %s\n", cfg.Repo)
+		if cfg.IsLocalMode() {
+			fmt.Printf("  Storage: local (%s)\n", s.GetRepo())
+		} else {
+			fmt.Printf("  Repo:    %s\n", cfg.Repo)
+		}
 		return nil
 	} else {
 		remotePath = fmt.Sprintf("envs/%s/%s.vty", pushEnv, name)
 	}
 
-	encryptedSize, err := encryptAndUploadBinary(client, cfg, remotePath, vaultFile, sess.MasterKey, name)
+	encryptedSize, err := encryptAndUploadWithStorage(s, cfg, remotePath, vaultFile, sess.MasterKey, name)
 	if err != nil {
 		return err
 	}
@@ -92,7 +96,11 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Size:    %s → %s\n",
 		ui.FormatBytes(originalSize),
 		ui.FormatBytes(int64(encryptedSize)))
-	fmt.Printf("  Repo:    %s\n", cfg.Repo)
+	if cfg.IsLocalMode() {
+		fmt.Printf("  Storage: local (%s)\n", s.GetRepo())
+	} else {
+		fmt.Printf("  Repo:    %s\n", cfg.Repo)
+	}
 
 	return nil
 }

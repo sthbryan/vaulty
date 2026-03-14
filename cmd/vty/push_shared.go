@@ -15,6 +15,7 @@ import (
 	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/session"
+	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/DeadBryam/vaulty/pkg/models"
 )
@@ -74,6 +75,37 @@ func loadConfigAndClient() (*config.Config, *github.Client, error) {
 	client := github.NewClient(token)
 
 	return cfg, client, nil
+}
+
+func getStorage(cfg *config.Config) (storage.Storage, error) {
+	if cfg.IsLocalMode() {
+		return storage.NewLocalStorage()
+	}
+
+	if cfg.Repo == "" {
+		return nil, fmt.Errorf("no repository configured for cloud mode")
+	}
+
+	token, err := github.GetGitHubToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get GitHub token: %w", err)
+	}
+
+	return storage.NewGitHubStorage(token, cfg.Repo)
+}
+
+func loadConfigAndStorage() (*config.Config, storage.Storage, error) {
+	cfg, err := config.Load("")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	s, err := getStorage(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return cfg, s, nil
 }
 
 func encryptAndPrepareFileWithSession(path, name string, secretType models.SecretType, sess *session.Session) (*BinaryVaultFile, int64, error) {
@@ -136,6 +168,26 @@ func encryptAndUploadBinary(client *github.Client, cfg *config.Config, remotePat
 	return len(hexEncrypted), nil
 }
 
+func encryptAndUploadWithStorage(s storage.Storage, cfg *config.Config, remotePath string, vaultFile *BinaryVaultFile, masterKey []byte, name string) (int, error) {
+	ui.PrintLock("Encrypting as binary...")
+
+	vaultData, err := json.Marshal(vaultFile)
+	if err != nil {
+		return 0, fmt.Errorf("failed to marshal vault file: %w", err)
+	}
+
+	hexEncrypted, err := crypto.EncryptBinary(vaultData, masterKey)
+	if err != nil {
+		return 0, fmt.Errorf("failed to encrypt binary: %w", err)
+	}
+
+	if err := uploadToStorage(s, cfg, remotePath, []byte(hexEncrypted), name); err != nil {
+		return 0, err
+	}
+
+	return len(hexEncrypted), nil
+}
+
 func uploadToGitHub(client *github.Client, cfg *config.Config, remotePath string, vaultData []byte, name string) error {
 	ctx := context.Background()
 	owner, repoName, err := github.ParseRepo(cfg.Repo)
@@ -182,4 +234,81 @@ func uploadToGitHub(client *github.Client, cfg *config.Config, remotePath string
 	}
 
 	return nil
+}
+
+func uploadToStorage(s storage.Storage, cfg *config.Config, remotePath string, vaultData []byte, name string) error {
+	ctx := context.Background()
+
+	var env, envName string
+
+	if strings.HasPrefix(remotePath, "envs/") {
+		parts := strings.Split(strings.TrimPrefix(remotePath, "envs/"), "/")
+		if len(parts) == 1 {
+
+			env = ""
+			envName = strings.TrimSuffix(parts[0], ".vty")
+		} else if len(parts) == 2 {
+
+			env = parts[0]
+			envName = strings.TrimSuffix(parts[1], ".vty")
+		}
+
+		ui.PrintCloud("Checking remote: %s/%s", s.GetRepo(), remotePath)
+
+		_, err := s.GetEnv(ctx, env, envName)
+		if err == nil {
+			if !pushForce {
+				ui.PrintWarning("File already exists on remote")
+				confirmed, confirmErr := ui.AskConfirm("Overwrite existing file?", false)
+				if confirmErr != nil {
+					return fmt.Errorf("confirmation failed: %w", confirmErr)
+				}
+				if !confirmed {
+					ui.PrintInfo("Push cancelled")
+					return nil
+				}
+			}
+			ui.PrintInfo("Will overwrite existing file")
+		}
+
+		ui.PrintCloud("Uploading to storage...")
+		if err := s.PutEnv(ctx, env, envName, vaultData); err != nil {
+			return fmt.Errorf("failed to upload: %w", err)
+		}
+		return nil
+	}
+
+	if strings.HasPrefix(remotePath, "ssh/") {
+		parts := strings.Split(strings.TrimPrefix(remotePath, "ssh/"), "/")
+		if len(parts) == 2 {
+			username := parts[0]
+			keyName := strings.TrimSuffix(parts[1], ".vty")
+
+			ui.PrintCloud("Checking remote: %s/ssh/%s", s.GetRepo(), username)
+
+			_, err := s.GetSSHKey(ctx, username, keyName)
+			if err == nil {
+				if !pushForce {
+					ui.PrintWarning("File already exists on remote")
+					confirmed, confirmErr := ui.AskConfirm("Overwrite existing file?", false)
+					if confirmErr != nil {
+						return fmt.Errorf("confirmation failed: %w", confirmErr)
+					}
+					if !confirmed {
+						ui.PrintInfo("Push cancelled")
+						return nil
+					}
+				}
+				ui.PrintInfo("Will overwrite existing file")
+			}
+
+			ui.PrintCloud("Uploading SSH key to storage...")
+			if err := s.PutSSHKey(ctx, username, keyName, vaultData); err != nil {
+				return fmt.Errorf("failed to upload SSH key: %w", err)
+			}
+			return nil
+		}
+	}
+
+	return fmt.Errorf("unsupported path format: %s", remotePath)
 }
