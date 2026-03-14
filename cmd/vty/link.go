@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/DeadBryam/vaulty/internal/config"
@@ -43,27 +45,81 @@ func runLink(cmd *cobra.Command, args []string) error {
 		defaultRepo = cfg.Repo
 	}
 
-	err = huh.NewInput().
-		Title("GitHub Repository").
-		Placeholder(defaultRepo).
-		Value(&repoFull).
-		Validate(func(s string) error {
-			if s == "" {
-				if defaultRepo != "" {
+	if defaultRepo == "" {
+		var vaultOption string
+		err := huh.NewSelect[string]().
+			Title("Vault name").
+			Description("Choose a name for your vault repository").
+			Options(
+				huh.NewOption("my-vault (default)", "my-vault"),
+				huh.NewOption("Custom name", "custom"),
+			).
+			Value(&vaultOption).
+			Run()
+		if err != nil {
+			return fmt.Errorf("form cancelled")
+		}
+
+		if vaultOption == "custom" {
+			err := huh.NewInput().
+				Title("Enter vault name").
+				Placeholder("my-secrets").
+				Value(&vaultOption).
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("vault name is required")
+					}
+					if strings.Contains(s, " ") {
+						return fmt.Errorf("vault name cannot contain spaces")
+					}
+					if !regexp.MustCompile(`^[a-zA-Z0-9\-_]+$`).MatchString(s) {
+						return fmt.Errorf("vault name can only contain letters, numbers, hyphens and underscores")
+					}
+					return nil
+				}).
+				Run()
+			if err != nil {
+				return fmt.Errorf("form cancelled")
+			}
+		}
+
+		var ownerInput string
+		err = huh.NewInput().
+			Title("GitHub owner/organization").
+			Placeholder("your-username or org name").
+			Value(&ownerInput).
+			Validate(func(s string) error {
+				if s == "" {
+					return fmt.Errorf("owner is required")
+				}
+				return nil
+			}).
+			Run()
+		if err != nil {
+			return fmt.Errorf("form cancelled")
+		}
+
+		repoFull = ownerInput + "/" + vaultOption
+	} else {
+		err = huh.NewInput().
+			Title("GitHub Repository").
+			Placeholder(defaultRepo).
+			Value(&repoFull).
+			Validate(func(s string) error {
+				if s == "" {
 					repoFull = defaultRepo
 					return nil
 				}
-				return fmt.Errorf("GitHub repository is required (format: owner/repo)")
-			}
-			return nil
-		}).
-		Run()
-	if err != nil {
-		return fmt.Errorf("form cancelled")
-	}
+				return nil
+			}).
+			Run()
+		if err != nil {
+			return fmt.Errorf("form cancelled")
+		}
 
-	if repoFull == "" {
-		repoFull = defaultRepo
+		if repoFull == "" {
+			repoFull = defaultRepo
+		}
 	}
 
 	token, err := github.GetGitHubToken()
