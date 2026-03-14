@@ -62,6 +62,7 @@ type Config struct {
 	DeviceSalt      Base64Bytes `json:"device_salt,omitempty"`
 	CacheDuration   string      `json:"cache_duration"`
 	StorageType     string      `json:"storage_type"`
+	LocalVaultPath  string      `json:"local_vault_path"`
 	CurrentUser     string      `json:"current_user,omitempty"`
 	CurrentUserRole string      `json:"current_user_role,omitempty"`
 	Metadata        *Metadata   `json:"metadata,omitempty"`
@@ -113,6 +114,10 @@ func (c *Config) Save(path string) error {
 
 	if c.StorageType == "" {
 		c.StorageType = "auto"
+	}
+
+	if c.LocalVaultPath == "" && c.StorageType == "local" {
+		c.LocalVaultPath = c.DefaultLocalVaultPath()
 	}
 
 	if len(c.Environments) == 0 {
@@ -191,6 +196,31 @@ func (c *Config) ClearCurrentUser() {
 	c.CurrentUser = ""
 	c.CurrentUserRole = ""
 	c.UpdatedAt = time.Now()
+}
+
+func (c *Config) IsLocalMode() bool {
+	return c.StorageType == "local"
+}
+
+func (c *Config) SetLocalMode() {
+	c.StorageType = "local"
+	if c.LocalVaultPath == "" {
+		c.LocalVaultPath = c.DefaultLocalVaultPath()
+	}
+	c.UpdatedAt = time.Now()
+}
+
+func (c *Config) SetCloudMode() {
+	c.StorageType = "cloud"
+	c.UpdatedAt = time.Now()
+}
+
+func (c *Config) DefaultLocalVaultPath() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(homeDir, ".vty", "vault")
 }
 
 func (c *Config) FindUser(username string) (*UserEntry, error) {
