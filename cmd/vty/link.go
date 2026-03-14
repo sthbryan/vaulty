@@ -11,20 +11,25 @@ import (
 	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 )
 
+var linkLocalMode bool
+
 var linkCmd = &cobra.Command{
 	Use:   "link",
-	Short: "Link to an existing Vaulty vault on GitHub",
-	Long: `Link your machine to an existing Vaulty vault on GitHub.
+	Short: "Link to an existing Vaulty vault",
+	Long: `Link your machine to an existing Vaulty vault.
 
 This command will:
-  • Fetch the vault metadata from the specified GitHub repository
+  • Fetch the vault metadata from the specified repository or local storage
   • Store the configuration locally
-  • Prepare you to login with 'vty login'`,
+  • Prepare you to login with 'vty login'
+
+Use --local for local storage mode.`,
 	RunE: runLink,
 }
 
@@ -38,6 +43,14 @@ func runLink(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
+	if linkLocalMode {
+		return runLinkLocal(cfg)
+	}
+
+	return runLinkGitHub(cfg)
+}
+
+func runLinkGitHub(cfg *config.Config) error {
 	var repoFull string
 
 	defaultRepo := ""
@@ -101,7 +114,8 @@ func runLink(cmd *cobra.Command, args []string) error {
 
 		repoFull = ownerInput + "/" + vaultOption
 	} else {
-		err = huh.NewInput().
+		var err3 error
+		err3 = huh.NewInput().
 			Title("GitHub Repository").
 			Placeholder(defaultRepo).
 			Value(&repoFull).
@@ -113,7 +127,7 @@ func runLink(cmd *cobra.Command, args []string) error {
 				return nil
 			}).
 			Run()
-		if err != nil {
+		if err3 != nil {
 			return fmt.Errorf("form cancelled")
 		}
 
@@ -179,6 +193,54 @@ func runLink(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func runLinkLocal(cfg *config.Config) error {
+	fmt.Println()
+	fmt.Println(ui.MutedStyle.Render("Linking to local vault in ~/.vty/vault/..."))
+	fmt.Println()
+
+	localStorage, err := storage.NewLocalStorage()
+	if err != nil {
+		return fmt.Errorf("creating local storage: %w", err)
+	}
+
+	ctx := context.Background()
+
+	metadataBytes, err := localStorage.GetMetadata(ctx)
+	if err != nil {
+		return fmt.Errorf("fetching local vault metadata: %w", err)
+	}
+
+	metadataJSON, err := crypto.DecompressHex(string(metadataBytes))
+	if err != nil {
+		return fmt.Errorf("decompressing metadata: %w", err)
+	}
+
+	var metadata config.Metadata
+	if err := json.Unmarshal(metadataJSON, &metadata); err != nil {
+		return fmt.Errorf("parsing metadata: %w", err)
+	}
+
+	cfg.SetLocalMode()
+	cfg.Metadata = &metadata
+
+	if err := cfg.Save(""); err != nil {
+		return fmt.Errorf("saving config: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println(ui.SuccessStyle.Render("✅ Linked to local vault"))
+	fmt.Println()
+	fmt.Println(ui.MutedStyle.Render("Found users:"))
+	for _, user := range metadata.Users {
+		fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("  • %s (%s)", user.Username, user.Role)))
+	}
+	fmt.Println()
+	fmt.Println(ui.MutedStyle.Render("Run 'vty login' to authenticate"))
+
+	return nil
+}
+
 func init() {
 	rootCmd.AddCommand(linkCmd)
+	linkCmd.Flags().BoolVarP(&linkLocalMode, "local", "l", false, "Use local storage instead of GitHub")
 }
