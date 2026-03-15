@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/session"
+	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/charmbracelet/lipgloss"
@@ -205,10 +208,156 @@ func listSecretsByEnvironment(ctx context.Context, client *github.Client, cfg *c
 	return allSecrets, nil
 }
 
+func runInfoLocal(cmd *cobra.Command, args []string, cfg *config.Config, s storage.Storage) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	fmt.Println()
+	fmt.Println(ui.MutedStyle.Render("Loading local vault contents..."))
+
+	var secrets []models.SecretInfo
+	var sshKeys []github.SSHKeyInfo
+	var resources []ResourceInfo
+	var configs []ResourceInfo
+
+	metadataData, err := s.GetMetadata(ctx)
+	var metadata *config.Metadata
+	if err == nil && len(metadataData) > 0 {
+		decompressed, err := crypto.DecompressHex(string(metadataData))
+		if err == nil {
+			metadata = &config.Metadata{}
+			if err := json.Unmarshal(decompressed, metadata); err != nil {
+				logger.Debug("Could not parse metadata", "error", err)
+			}
+		}
+	}
+	if metadata == nil {
+		metadata = &config.Metadata{}
+	}
+
+	envs, err := s.ListEnvs(ctx)
+	if err == nil {
+		for _, env := range envs {
+			var envName string
+			if env == "." {
+				envName = "shared"
+			} else {
+				envName = env
+			}
+
+			if infoEnv != "" && infoEnv != "shared" && infoEnv != envName {
+				continue
+			}
+
+			homeDir, _ := os.UserHomeDir()
+			entries, err := os.ReadDir(filepath.Join(homeDir, ".vty", "vault", "envs", env))
+			if err != nil {
+				continue
+			}
+
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+				name := entry.Name()
+				if strings.HasSuffix(name, ".vty") {
+					secretName := strings.TrimSuffix(name, ".vty")
+					info, _ := entry.Info()
+					secrets = append(secrets, models.SecretInfo{
+						Name:        secretName,
+						Type:        models.SecretTypeEnv,
+						Environment: envName,
+						CreatedAt:   time.Time{},
+						UpdatedAt:   info.ModTime(),
+						Size:        info.Size(),
+					})
+				}
+			}
+		}
+	}
+
+	resourcesList, err := s.ListResources(ctx)
+	if err == nil {
+		for _, path := range resourcesList {
+			if strings.HasSuffix(path, ".vty") {
+				name := strings.TrimSuffix(filepath.Base(path), ".vty")
+				dir := filepath.Dir(path)
+				tag := ""
+				if dir != "." {
+					tag = dir
+				}
+
+				homeDir, _ := os.UserHomeDir()
+				absPath := filepath.Join(homeDir, ".vty", "vault", path)
+				info, _ := os.Stat(absPath)
+				size := int64(0)
+				if info != nil {
+					size = info.Size()
+				}
+
+				if strings.HasPrefix(path, "resources/") || strings.HasPrefix(path, "resources\\") {
+					resources = append(resources, ResourceInfo{
+						Name:        name,
+						Type:        models.SecretTypeResource,
+						Tag:         tag,
+						IsEncrypted: false,
+						Size:        size,
+					})
+				} else if strings.HasPrefix(path, "config/") || strings.HasPrefix(path, "config\\") {
+					configs = append(configs, ResourceInfo{
+						Name:        name,
+						Type:        models.SecretTypeConfig,
+						Tag:         tag,
+						IsEncrypted: false,
+						Size:        size,
+					})
+				}
+			}
+		}
+	}
+
+	if len(secrets) == 0 && len(resources) == 0 && len(configs) == 0 && len(metadata.Users) == 0 {
+		fmt.Println()
+		fmt.Println(ui.InfoStyle.Render("No secrets found in local vault"))
+		return nil
+	}
+
+	sort.Slice(secrets, func(i, j int) bool {
+		if secrets[i].Type == secrets[j].Type {
+			return secrets[i].Name < secrets[j].Name
+		}
+		return secrets[i].Type < secrets[j].Type
+	})
+
+	currentUser := cfg.CurrentUser
+	if currentUser == "" {
+		currentUser = "local"
+	}
+
+	sess := &session.Session{
+		Username:  currentUser,
+		Role:      cfg.CurrentUserRole,
+		MasterKey: nil,
+	}
+
+	renderDetailedVaultInfo(cfg, sess, secrets, sshKeys, resources, configs, cfg.UpdatedAt)
+	return nil
+}
+
 func runInfo(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load("")
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
+	}
+
+	if cfg.IsLocalMode() {
+		localStorage, err := storage.NewLocalStorage()
+		if err != nil {
+			return err
+		}
+		var s storage.Storage
+		s = localStorage
+		return runInfoLocal(cmd, args, cfg, s)
 	}
 
 	sess, err := ensureAuthenticated(cfg)

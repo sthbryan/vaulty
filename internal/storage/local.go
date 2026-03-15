@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/DeadBryam/vaulty/internal/crypto"
 )
@@ -232,6 +233,33 @@ func (l *LocalStorage) ListEnvs(ctx context.Context) ([]string, error) {
 	}
 
 	return envs, nil
+}
+
+func (l *LocalStorage) ListEnvSecrets(ctx context.Context, env string) ([]string, error) {
+	var envDir string
+	if env == "" {
+		envDir = filepath.Join(l.baseDir, "envs")
+	} else {
+		envDir = filepath.Join(l.baseDir, "envs", env)
+	}
+
+	entries, err := os.ReadDir(envDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("failed to read env directory: %w", err)
+	}
+
+	var secrets []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".vty") {
+			name := strings.TrimSuffix(entry.Name(), ".vty")
+			secrets = append(secrets, name)
+		}
+	}
+
+	return secrets, nil
 }
 
 func (l *LocalStorage) PutEnv(ctx context.Context, env, name string, data []byte) error {
