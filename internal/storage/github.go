@@ -238,3 +238,60 @@ func (g *GitHubStorage) PutResource(ctx context.Context, path string, data []byt
 
 	return g.client.PutContent(ctx, g.owner, g.repo, path, req)
 }
+
+func (g *GitHubStorage) DeleteResource(ctx context.Context, path string) error {
+	content, err := g.client.GetContent(ctx, g.owner, g.repo, path)
+	if err != nil {
+		return fmt.Errorf("resource not found: %w", err)
+	}
+
+	return g.client.DeleteContent(ctx, g.owner, g.repo, path, content.Sha)
+}
+
+func (g *GitHubStorage) ListResources(ctx context.Context) ([]string, error) {
+	entries, err := g.client.ListDirectory(ctx, g.owner, g.repo, "resources")
+	if err != nil {
+		return []string{}, nil
+	}
+
+	var resources []string
+	for _, entry := range entries {
+		if entry.Type != "dir" && strings.HasSuffix(entry.Name, ".vty") {
+			resources = append(resources, entry.Name)
+		}
+	}
+
+	return resources, nil
+}
+
+func (g *GitHubStorage) ListMetadata(ctx context.Context) ([]string, error) {
+	var files []string
+
+	// Check metadata.vty
+	_, err := g.client.GetContent(ctx, g.owner, g.repo, "metadata.vty")
+	if err == nil {
+		files = append(files, "metadata.vty")
+	}
+
+	// List user keys
+	keys, err := g.client.ListDirectory(ctx, g.owner, g.repo, "keys")
+	if err == nil {
+		for _, key := range keys {
+			if key.Type != "dir" && strings.HasSuffix(key.Name, ".vty") {
+				files = append(files, "keys/"+key.Name)
+			}
+		}
+	}
+
+	// List recovery files
+	recovery, err := g.client.ListDirectory(ctx, g.owner, g.repo, "recovery")
+	if err == nil {
+		for _, file := range recovery {
+			if file.Type != "dir" && strings.HasSuffix(file.Name, ".vty") {
+				files = append(files, "recovery/"+file.Name)
+			}
+		}
+	}
+
+	return files, nil
+}
