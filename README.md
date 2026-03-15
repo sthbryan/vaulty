@@ -191,6 +191,7 @@ Vaulty stores config at `~/.vty/config.json`. Key settings:
 - [ ] **Web Interface** — GUI for managing secrets
 - [ ] **Modular Downloads** — Fetch specific secrets instead of entire vault
 - [ ] **Security Mode** — Server mode that always requires password input
+- [ ] **Multiple Sources** — Support multiple vault backends at same time (GitHub, local, cloud)
 
 ### Low Priority
 - [x] **Reset/Clean** — **DESTRUCTIVE** Vault reset (requires seed phrase confirmation)
