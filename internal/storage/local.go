@@ -341,3 +341,72 @@ func (l *LocalStorage) PutResource(ctx context.Context, path string, data []byte
 
 	return os.WriteFile(fullPath, data, 0600)
 }
+
+func (l *LocalStorage) DeleteResource(ctx context.Context, path string) error {
+	fullPath := filepath.Join(l.baseDir, path)
+	err := os.Remove(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("resource not found: %s", path)
+		}
+		return fmt.Errorf("failed to delete resource: %w", err)
+	}
+
+	dir := filepath.Dir(fullPath)
+	l.cleanEmptyDir(dir)
+
+	return nil
+}
+
+func (l *LocalStorage) ListResources(ctx context.Context) ([]string, error) {
+	resourcesDir := filepath.Join(l.baseDir, "resources")
+
+	var resources []string
+	err := filepath.Walk(resourcesDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() && filepath.Ext(path) == ".vty" {
+			rel, _ := filepath.Rel(resourcesDir, path)
+			resources = append(resources, rel)
+		}
+		return nil
+	})
+
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to list resources: %w", err)
+	}
+
+	return resources, nil
+}
+
+func (l *LocalStorage) ListMetadata(ctx context.Context) ([]string, error) {
+	var files []string
+
+	metadataPath := filepath.Join(l.baseDir, "metadata.vty")
+	if _, err := os.Stat(metadataPath); err == nil {
+		files = append(files, "metadata.vty")
+	}
+
+	keysDir := filepath.Join(l.baseDir, "keys")
+	entries, err := os.ReadDir(keysDir)
+	if err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".vty" {
+				files = append(files, filepath.Join("keys", entry.Name()))
+			}
+		}
+	}
+
+	recoveryDir := filepath.Join(l.baseDir, "recovery")
+	entries, err = os.ReadDir(recoveryDir)
+	if err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".vty" {
+				files = append(files, filepath.Join("recovery", entry.Name()))
+			}
+		}
+	}
+
+	return files, nil
+}
