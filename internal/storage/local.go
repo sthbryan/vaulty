@@ -229,6 +229,9 @@ func (l *LocalStorage) ListEnvs(ctx context.Context) ([]string, error) {
 	for _, entry := range entries {
 		if entry.IsDir() {
 			envs = append(envs, entry.Name())
+		} else if strings.HasSuffix(entry.Name(), ".vty") {
+			name := strings.TrimSuffix(entry.Name(), ".vty")
+			envs = append(envs, name)
 		}
 	}
 
@@ -236,26 +239,30 @@ func (l *LocalStorage) ListEnvs(ctx context.Context) ([]string, error) {
 }
 
 func (l *LocalStorage) ListEnvSecrets(ctx context.Context, env string) ([]string, error) {
-	var envDir string
 	if env == "" {
-		envDir = filepath.Join(l.baseDir, "envs")
-	} else {
-		envDir = filepath.Join(l.baseDir, "envs", env)
+		return []string{}, nil
 	}
 
-	entries, err := os.ReadDir(envDir)
+	basePath := filepath.Join(l.baseDir, "envs")
+	entries, err := os.ReadDir(basePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []string{}, nil
 		}
-		return nil, fmt.Errorf("failed to read env directory: %w", err)
+		return nil, fmt.Errorf("failed to read envs directory: %w", err)
 	}
 
 	var secrets []string
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".vty") {
-			name := strings.TrimSuffix(entry.Name(), ".vty")
-			secrets = append(secrets, name)
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasSuffix(name, ".vty") {
+			secretName := strings.TrimSuffix(name, ".vty")
+			if secretName == env {
+				secrets = append(secrets, secretName)
+			}
 		}
 	}
 

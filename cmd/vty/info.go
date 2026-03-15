@@ -249,28 +249,32 @@ func runInfoLocal(cmd *cobra.Command, args []string, cfg *config.Config, s stora
 				continue
 			}
 
-			homeDir, _ := os.UserHomeDir()
-			entries, err := os.ReadDir(filepath.Join(homeDir, ".vty", "vault", "envs", env))
+			envSecrets, err := s.ListEnvSecrets(ctx, env)
 			if err != nil {
+				logger.Debug("Failed to list env secrets", "env", env, "error", err)
 				continue
 			}
 
-			for _, entry := range entries {
-				if entry.IsDir() {
-					continue
-				}
-				name := entry.Name()
-				if strings.HasSuffix(name, ".vty") {
-					secretName := strings.TrimSuffix(name, ".vty")
-					info, _ := entry.Info()
-					secrets = append(secrets, models.SecretInfo{
-						Name:        secretName,
-						Type:        models.SecretTypeEnv,
-						Environment: envName,
-						CreatedAt:   time.Time{},
-						UpdatedAt:   info.ModTime(),
-						Size:        info.Size(),
-					})
+			homeDir, _ := os.UserHomeDir()
+			filePath := filepath.Join(homeDir, ".vty", "vault", "envs", env+".vty")
+			info, _ := os.Stat(filePath)
+
+			for _, secretName := range envSecrets {
+				secrets = append(secrets, models.SecretInfo{
+					Name:        secretName,
+					Type:        models.SecretTypeEnv,
+					Environment: envName,
+					CreatedAt:   time.Time{},
+					UpdatedAt:   time.Time{},
+				})
+			}
+
+			if info != nil {
+				for i := range secrets {
+					if secrets[i].Type == models.SecretTypeEnv && secrets[i].Environment == envName {
+						secrets[i].UpdatedAt = info.ModTime()
+						secrets[i].Size = info.Size()
+					}
 				}
 			}
 		}
