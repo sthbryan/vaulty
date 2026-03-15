@@ -9,9 +9,8 @@ import (
 	"time"
 
 	"github.com/DeadBryam/vaulty/internal/compress"
-	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/crypto"
-	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -53,14 +52,12 @@ func runPullConfig(cmd *cobra.Command, args []string) error {
 }
 
 func runPullResourceOrConfig(name, baseDir string) error {
-	cfg, err := config.Load("")
+	cfg, s, err := loadConfigAndStorage()
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
-	}
+	var _ storage.Storage = s
 
 	sess, err := ensureAuthenticated(cfg)
 	if err != nil {
@@ -74,37 +71,21 @@ func runPullResourceOrConfig(name, baseDir string) error {
 		remotePath = fmt.Sprintf("%s/%s.vty", baseDir, name)
 	}
 
-	owner, repo, err := github.ParseRepo(cfg.Repo)
-	if err != nil {
-		return fmt.Errorf("parsing repo: %w", err)
-	}
-
-	token, err := github.GetGitHubToken()
-	if err != nil {
-		return fmt.Errorf("getting GitHub token: %w", err)
-	}
-
-	client := github.NewClient(token)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	logger.Info("☁️  Downloading resource...", "name", name)
 
-	content, err := client.GetContent(ctx, owner, repo, remotePath)
+	data, err := s.GetResource(ctx, remotePath)
 	if err != nil {
 		return fmt.Errorf("resource not found: %s (try with --tag flag)", remotePath)
 	}
 
-	logger.Info("✓ Downloaded", "path", remotePath, "size", content.Size)
-
-	encodedData, err := client.DecodeContent(content)
-	if err != nil {
-		return fmt.Errorf("decoding content: %w", err)
-	}
+	logger.Info("✓ Downloaded", "path", remotePath, "size", len(data))
 
 	logger.Info("🔓 Decrypting...")
 
-	vaultJSON, err := crypto.DecryptBinary(string(encodedData), sess.MasterKey)
+	vaultJSON, err := crypto.DecryptBinary(string(data), sess.MasterKey)
 	if err != nil {
 		if err == crypto.ErrDecryptionFailed {
 			return fmt.Errorf("decryption failed: invalid password")

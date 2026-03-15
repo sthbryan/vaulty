@@ -318,3 +318,26 @@ func (l *LocalStorage) CopyFile(src, dst string) error {
 
 	return dstFile.Sync()
 }
+
+func (l *LocalStorage) GetResource(ctx context.Context, path string) ([]byte, error) {
+	fullPath := filepath.Join(l.baseDir, path)
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("resource not found: %s", path)
+		}
+		return nil, fmt.Errorf("failed to read resource: %w", err)
+	}
+	return data, nil
+}
+
+func (l *LocalStorage) PutResource(ctx context.Context, path string, data []byte) error {
+	fullPath := filepath.Join(l.baseDir, path)
+	dir := filepath.Dir(fullPath)
+
+	if err := l.ensureDir(dir); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	return os.WriteFile(fullPath, data, 0600)
+}

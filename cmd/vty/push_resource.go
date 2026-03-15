@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,7 +11,7 @@ import (
 	"github.com/DeadBryam/vaulty/internal/compress"
 	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/crypto"
-	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/spf13/cobra"
@@ -75,7 +74,7 @@ func runPushResourceOrConfig(name, path string, secretType models.SecretType, ba
 		return err
 	}
 
-	cfg, client, err := loadConfigAndClient()
+	cfg, s, err := loadConfigAndStorage()
 	if err != nil {
 		return err
 	}
@@ -111,7 +110,7 @@ func runPushResourceOrConfig(name, path string, secretType models.SecretType, ba
 		remotePath = fmt.Sprintf("%s/%s.vty", baseDir, name)
 	}
 
-	encryptedSize, err := encryptAndUploadResource(client, cfg, remotePath, vaultFile, sess.MasterKey, name)
+	encryptedSize, err := encryptAndUploadResource(s, remotePath, vaultFile, sess.MasterKey, name, cfg)
 	if err != nil {
 		return err
 	}
@@ -129,7 +128,12 @@ func runPushResourceOrConfig(name, path string, secretType models.SecretType, ba
 	fmt.Printf("  Size:      %s → %s\n",
 		ui.FormatBytes(originalSize),
 		ui.FormatBytes(int64(encryptedSize)))
-	fmt.Printf("  Repo:      %s\n", cfg.Repo)
+
+	if cfg.IsLocalMode() {
+		fmt.Printf("  Storage:   Local (%s)\n", cfg.LocalVaultPath)
+	} else {
+		fmt.Printf("  Repo:      %s\n", cfg.Repo)
+	}
 
 	return nil
 }
@@ -185,7 +189,7 @@ func prepareResourceFile(path, name string, secretType models.SecretType, isDire
 	return vaultFile, originalSize, nil
 }
 
-func encryptAndUploadResource(client *github.Client, cfg *config.Config, remotePath string, vaultFile *ResourceVaultFile, masterKey []byte, name string) (int, error) {
+func encryptAndUploadResource(s storage.Storage, remotePath string, vaultFile *ResourceVaultFile, masterKey []byte, name string, cfg *config.Config) (int, error) {
 	ui.PrintLock("Encrypting...")
 
 	vaultData, err := json.Marshal(vaultFile)
@@ -198,55 +202,47 @@ func encryptAndUploadResource(client *github.Client, cfg *config.Config, remoteP
 		return 0, fmt.Errorf("failed to encrypt: %w", err)
 	}
 
-	if err := uploadResourceToGitHub(client, cfg, remotePath, []byte(hexEncrypted), name); err != nil {
+	if err := uploadResourceToStorage(s, remotePath, []byte(hexEncrypted), name, cfg); err != nil {
 		return 0, err
 	}
 
 	return len(hexEncrypted), nil
 }
 
-func uploadResourceToGitHub(client *github.Client, cfg *config.Config, remotePath string, vaultData []byte, name string) error {
+func uploadResourceToStorage(s storage.Storage, remotePath string, vaultData []byte, name string, cfg *config.Config) error {
 	ctx := context.Background()
-	owner, repoName, err := github.ParseRepo(cfg.Repo)
-	if err != nil {
-		return fmt.Errorf("invalid repo format: %w", err)
+
+	if cfg.IsLocalMode() {
+		ui.PrintCloud("Saving to local storage: %s", remotePath)
+	} else {
+		ui.PrintCloud("Checking remote: %s/%s", s.GetRepo(), remotePath)
 	}
 
-	ui.PrintCloud("Checking remote: %s/%s/%s", owner, repoName, remotePath)
-
-	var existingSha string
-	existingContent, err := client.GetContent(ctx, owner, repoName, remotePath)
-	if err == nil && existingContent != nil {
-		if !pushForce {
-			ui.PrintWarning("File already exists on remote")
-			confirmed, confirmErr := ui.AskConfirm("Overwrite existing file?", false)
-			if confirmErr != nil {
-				return fmt.Errorf("confirmation failed: %w", confirmErr)
+	if !cfg.IsLocalMode() {
+		_, err := s.GetResource(ctx, remotePath)
+		if err == nil {
+			if !pushForce {
+				ui.PrintWarning("File already exists on remote")
+				confirmed, confirmErr := ui.AskConfirm("Overwrite existing file?", false)
+				if confirmErr != nil {
+					return fmt.Errorf("confirmation failed: %w", confirmErr)
+				}
+				if !confirmed {
+					ui.PrintInfo("Push cancelled")
+					return nil
+				}
 			}
-			if !confirmed {
-				ui.PrintInfo("Push cancelled")
-				return nil
-			}
+			ui.PrintInfo("Will overwrite existing file")
 		}
-		existingSha = existingContent.Sha
-		ui.PrintInfo("Will overwrite existing file")
 	}
 
-	ui.PrintCloud("Uploading to GitHub...")
-
-	encodedContent := base64.StdEncoding.EncodeToString(vaultData)
-	commitMsg := fmt.Sprintf("Update %s via Vaulty push", name)
-	if existingSha == "" {
-		commitMsg = fmt.Sprintf("Add %s via Vaulty push", name)
+	if cfg.IsLocalMode() {
+		ui.PrintCloud("Saving to local storage...")
+	} else {
+		ui.PrintCloud("Uploading to GitHub...")
 	}
 
-	req := github.ContentRequest{
-		Message: commitMsg,
-		Content: encodedContent,
-		Sha:     existingSha,
-	}
-
-	if err := client.PutContent(ctx, owner, repoName, remotePath, req); err != nil {
+	if err := s.PutResource(ctx, remotePath, vaultData); err != nil {
 		return fmt.Errorf("failed to upload: %w", err)
 	}
 

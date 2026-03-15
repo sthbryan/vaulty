@@ -213,3 +213,28 @@ func (g *GitHubStorage) DeleteEnv(ctx context.Context, env, name string) error {
 
 	return g.client.DeleteContent(ctx, g.owner, g.repo, path, content.Sha)
 }
+
+func (g *GitHubStorage) GetResource(ctx context.Context, path string) ([]byte, error) {
+	content, err := g.client.GetContent(ctx, g.owner, g.repo, path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get resource: %w", err)
+	}
+
+	return g.client.DecodeContent(content)
+}
+
+func (g *GitHubStorage) PutResource(ctx context.Context, path string, data []byte) error {
+	content, err := g.client.GetContent(ctx, g.owner, g.repo, path)
+	sha := ""
+	if err == nil && content != nil {
+		sha = content.Sha
+	}
+
+	req := github.ContentRequest{
+		Message: fmt.Sprintf("Update resource %s via Vaulty", path),
+		Content: g.client.EncodeContent(data),
+		Sha:     sha,
+	}
+
+	return g.client.PutContent(ctx, g.owner, g.repo, path, req)
+}

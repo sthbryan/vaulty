@@ -33,6 +33,9 @@ type Storage interface {
 	GetEnv(ctx context.Context, env, name string) ([]byte, error)
 	DeleteEnv(ctx context.Context, env, name string) error
 
+	GetResource(ctx context.Context, path string) ([]byte, error)
+	PutResource(ctx context.Context, path string, data []byte) error
+
 	IsLocal() bool
 	GetRepo() string
 }
