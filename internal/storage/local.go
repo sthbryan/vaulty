@@ -394,22 +394,36 @@ func (l *LocalStorage) DeleteResource(ctx context.Context, path string) error {
 }
 
 func (l *LocalStorage) ListResources(ctx context.Context) ([]string, error) {
-	resourcesDir := filepath.Join(l.baseDir, "resources")
-
 	var resources []string
+
+	resourcesDir := filepath.Join(l.baseDir, "resources")
 	err := filepath.Walk(resourcesDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
 		if !info.IsDir() && filepath.Ext(path) == ".vty" {
 			rel, _ := filepath.Rel(resourcesDir, path)
-			resources = append(resources, rel)
+			resources = append(resources, filepath.Join("resources", rel))
 		}
 		return nil
 	})
-
 	if err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("failed to list resources: %w", err)
+	}
+
+	configDir := filepath.Join(l.baseDir, "config")
+	err = filepath.Walk(configDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() && filepath.Ext(path) == ".vty" {
+			rel, _ := filepath.Rel(configDir, path)
+			resources = append(resources, filepath.Join("config", rel))
+		}
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to list config: %w", err)
 	}
 
 	return resources, nil
