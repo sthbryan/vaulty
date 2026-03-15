@@ -60,6 +60,13 @@ func TestParseRepo(t *testing.T) {
 			wantErr:   false,
 		},
 		{
+			name:      "local mode",
+			repo:      "local://",
+			wantOwner: "local",
+			wantName:  "",
+			wantErr:   false,
+		},
+		{
 			name:        "missing slash",
 			repo:        "ownerrepo",
 			wantErr:     true,
