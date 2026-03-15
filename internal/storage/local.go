@@ -62,7 +62,7 @@ func (l *LocalStorage) GetMetadata(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("failed to read metadata: %w", err)
 	}
 
-	return crypto.DecompressHex(string(data))
+	return data, nil
 }
 
 func (l *LocalStorage) PutMetadata(ctx context.Context, data []byte) error {
