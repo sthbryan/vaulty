@@ -284,13 +284,11 @@ func (g *GitHubStorage) ListResources(ctx context.Context) ([]string, error) {
 func (g *GitHubStorage) ListMetadata(ctx context.Context) ([]string, error) {
 	var files []string
 
-	// Check metadata.vty
 	_, err := g.client.GetContent(ctx, g.owner, g.repo, "metadata.vty")
 	if err == nil {
 		files = append(files, "metadata.vty")
 	}
 
-	// List user keys
 	keys, err := g.client.ListDirectory(ctx, g.owner, g.repo, "keys")
 	if err == nil {
 		for _, key := range keys {
@@ -300,7 +298,6 @@ func (g *GitHubStorage) ListMetadata(ctx context.Context) ([]string, error) {
 		}
 	}
 
-	// List recovery files
 	recovery, err := g.client.ListDirectory(ctx, g.owner, g.repo, "recovery")
 	if err == nil {
 		for _, file := range recovery {
