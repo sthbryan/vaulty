@@ -12,6 +12,7 @@ import (
 	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/password"
 	"github.com/DeadBryam/vaulty/internal/session"
+	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
@@ -40,9 +41,11 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	if cfg.Repo == "" {
+	if cfg.Repo == "" && !cfg.IsLocalMode() {
 		return fmt.Errorf("Vaulty not initialized. Run 'vty init' first")
 	}
+
+	isLocalMode := cfg.IsLocalMode()
 
 	mgr := session.GetManager()
 	existingSession := mgr.Get(cfg.CurrentUser)
@@ -103,32 +106,34 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("form cancelled")
 	}
 
-	token, err := github.GetGitHubToken()
-	if err != nil {
-		return fmt.Errorf("GitHub authentication: %w", err)
-	}
-
-	client := github.NewClient(token)
-	owner, repo, err := github.ParseRepo(cfg.Repo)
-	if err != nil {
-		return fmt.Errorf("invalid repository format: %w", err)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	var s storage.Storage
+	if isLocalMode {
+		localStorage, err := storage.NewLocalStorage()
+		if err != nil {
+			return fmt.Errorf("initializing local storage: %w", err)
+		}
+		s = localStorage
+	} else {
+		token, err := github.GetGitHubToken()
+		if err != nil {
+			return fmt.Errorf("GitHub authentication: %w", err)
+		}
+		s, err = storage.NewGitHubStorage(token, cfg.Repo)
+		if err != nil {
+			return fmt.Errorf("invalid repository format: %w", err)
+		}
+	}
+
 	fmt.Println(ui.MutedStyle.Render("Validating credentials..."))
-	metadataResp, err := client.GetContent(ctx, owner, repo, ".vaulty/metadata.vty")
+	metadataBytes, err := s.GetMetadata(ctx)
 	if err != nil {
 		return fmt.Errorf("downloading metadata: %w", err)
 	}
 
-	metadataEncData, err := client.DecodeContent(metadataResp)
-	if err != nil {
-		return fmt.Errorf("decoding metadata: %w", err)
-	}
-
-	metadataJSON, err := crypto.DecompressHex(string(metadataEncData))
+	metadataJSON, err := crypto.DecompressHex(string(metadataBytes))
 	if err != nil {
 		return fmt.Errorf("decompressing metadata: %w", err)
 	}
@@ -163,15 +168,9 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println(ui.MutedStyle.Render("Downloading encrypted keys..."))
-	keyPath := fmt.Sprintf(".vaulty/keys/%s.vty", username)
-	keyResp, err := client.GetContent(ctx, owner, repo, keyPath)
+	keyData, err := s.GetUserKeys(ctx, username)
 	if err != nil {
 		return fmt.Errorf("downloading user keys: %w", err)
-	}
-
-	keyData, err := client.DecodeContent(keyResp)
-	if err != nil {
-		return fmt.Errorf("decoding key data: %w", err)
 	}
 
 	fmt.Println(ui.MutedStyle.Render("Decrypting master key..."))
@@ -201,18 +200,13 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println(ui.MutedStyle.Render("Downloading vault..."))
-	vaultResp, err := client.GetContent(ctx, owner, repo, ".vaulty/vault.vty")
+	vaultDataBytes, err := s.GetVault(ctx)
 	if err != nil {
 		return fmt.Errorf("downloading vault: %w", err)
 	}
 
-	vaultEncData, err := client.DecodeContent(vaultResp)
-	if err != nil {
-		return fmt.Errorf("decoding vault data: %w", err)
-	}
-
 	fmt.Println(ui.MutedStyle.Render("Decrypting vault..."))
-	vaultJSON, err := crypto.DecompressHex(string(vaultEncData))
+	vaultJSON, err := crypto.DecompressHex(string(vaultDataBytes))
 	if err != nil {
 		fmt.Println()
 		fmt.Println(ui.ErrorStyle.Render("❌ Failed to decompress vault"))

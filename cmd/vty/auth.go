@@ -11,10 +11,11 @@ import (
 	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/password"
 	"github.com/DeadBryam/vaulty/internal/session"
+	"github.com/DeadBryam/vaulty/internal/storage"
 )
 
 func ensureAuthenticated(cfg *config.Config) (*session.Session, error) {
-	if cfg.Repo == "" {
+	if cfg.Repo == "" && !cfg.IsLocalMode() {
 		return nil, fmt.Errorf("vaulty not initialized. Run 'vty init' first")
 	}
 
@@ -49,31 +50,34 @@ func ensureAuthenticated(cfg *config.Config) (*session.Session, error) {
 }
 
 func authenticateUser(cfg *config.Config, password string) (*session.Session, error) {
-	token, err := github.GetGitHubToken()
-	if err != nil {
-		return nil, fmt.Errorf("github authentication: %w", err)
-	}
-
-	client := github.NewClient(token)
-	owner, repo, err := github.ParseRepo(cfg.Repo)
-	if err != nil {
-		return nil, fmt.Errorf("invalid repository format: %w", err)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	metadataResp, err := client.GetContent(ctx, owner, repo, ".vaulty/metadata.vty")
+	var s storage.Storage
+	if cfg.IsLocalMode() {
+		localStorage, err := storage.NewLocalStorage()
+		if err != nil {
+			return nil, fmt.Errorf("initializing local storage: %w", err)
+		}
+		s = localStorage
+	} else {
+		token, err := github.GetGitHubToken()
+		if err != nil {
+			return nil, fmt.Errorf("github authentication: %w", err)
+		}
+		var err2 error
+		s, err2 = storage.NewGitHubStorage(token, cfg.Repo)
+		if err2 != nil {
+			return nil, fmt.Errorf("invalid repository format: %w", err2)
+		}
+	}
+
+	metadataBytes, err := s.GetMetadata(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("downloading metadata: %w", err)
 	}
 
-	metadataEncData, err := client.DecodeContent(metadataResp)
-	if err != nil {
-		return nil, fmt.Errorf("decoding metadata: %w", err)
-	}
-
-	metadataJSON, err := crypto.DecompressHex(string(metadataEncData))
+	metadataJSON, err := crypto.DecompressHex(string(metadataBytes))
 	if err != nil {
 		return nil, fmt.Errorf("decompressing metadata: %w", err)
 	}
@@ -101,15 +105,9 @@ func authenticateUser(cfg *config.Config, password string) (*session.Session, er
 		}
 	}
 
-	keyPath := fmt.Sprintf(".vaulty/keys/%s.vty", cfg.CurrentUser)
-	keyResp, err := client.GetContent(ctx, owner, repo, keyPath)
+	keyData, err := s.GetUserKeys(ctx, cfg.CurrentUser)
 	if err != nil {
 		return nil, fmt.Errorf("downloading user keys: %w", err)
-	}
-
-	keyData, err := client.DecodeContent(keyResp)
-	if err != nil {
-		return nil, fmt.Errorf("decoding key data: %w", err)
 	}
 
 	keyJSON, err := crypto.DecompressHex(string(keyData))
@@ -127,17 +125,12 @@ func authenticateUser(cfg *config.Config, password string) (*session.Session, er
 		return nil, fmt.Errorf("decrypting master key: %w", err)
 	}
 
-	vaultResp, err := client.GetContent(ctx, owner, repo, ".vaulty/vault.vty")
+	vaultDataBytes, err := s.GetVault(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("downloading vault: %w", err)
 	}
 
-	vaultEncData, err := client.DecodeContent(vaultResp)
-	if err != nil {
-		return nil, fmt.Errorf("decoding vault data: %w", err)
-	}
-
-	vaultJSON, err := crypto.DecompressHex(string(vaultEncData))
+	vaultJSON, err := crypto.DecompressHex(string(vaultDataBytes))
 	if err != nil {
 		return nil, fmt.Errorf("decompressing vault: %w", err)
 	}
