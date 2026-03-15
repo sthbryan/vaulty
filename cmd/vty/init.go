@@ -758,7 +758,7 @@ func initializeNewLocalVault(ctx context.Context, cfg *config.Config, passStorag
 	}
 
 	metadata := &config.Metadata{
-		Repo:    "local",
+		Repo:    "local://",
 		Owner:   username,
 		Version: "2.1",
 		Users: []config.UserEntry{

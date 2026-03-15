@@ -78,6 +78,9 @@ func NewClient(token string) *Client {
 }
 
 func ParseRepo(repo string) (owner, name string, err error) {
+	if repo == "local://" {
+		return "local", "", nil
+	}
 	parts := strings.Split(repo, "/")
 	if len(parts) != 2 {
 		return "", "", fmt.Errorf("invalid repo format: %s (expected owner/repo)", repo)
