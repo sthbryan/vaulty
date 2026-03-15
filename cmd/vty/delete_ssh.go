@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -17,17 +16,12 @@ func runDeleteSSH(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("name cannot contain path separators")
 	}
 
-	cfg, client, err := getConfigAndClient()
+	s, cfg, err := getStorageForDelete()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	ctx := context.Background()
-
-	owner, repoName, err := github.ParseRepo(cfg.Repo)
-	if err != nil {
-		return fmt.Errorf("invalid repo format: %w", err)
-	}
 
 	var path string
 	if deleteUser != "" {
@@ -36,8 +30,8 @@ func runDeleteSSH(cmd *cobra.Command, args []string) error {
 		path = fmt.Sprintf("ssh/%s.vty", name)
 	}
 
-	content, err := client.GetContent(ctx, owner, repoName, path)
-	if err != nil || content == nil {
+	_, err = s.GetSSHKey(ctx, deleteUser, name)
+	if err != nil {
 		return fmt.Errorf("SSH key not found: %s", name)
 	}
 
@@ -61,9 +55,9 @@ func runDeleteSSH(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	ui.PrintInfo("Deleting from GitHub...")
+	ui.PrintInfo("Deleting...")
 
-	if err := client.DeleteContent(ctx, owner, repoName, path, content.Sha); err != nil {
+	if err := s.DeleteSSHKey(ctx, deleteUser, name, ""); err != nil {
 		return fmt.Errorf("failed to delete: %w", err)
 	}
 
