@@ -142,7 +142,8 @@ func (c *Config) Save(path string) error {
 }
 
 func (c *Config) Validate() error {
-	if c.Repo == "" {
+	// Allow both cloud mode (with repo) and local mode
+	if c.Repo == "" && !c.IsLocalMode() {
 		return fmt.Errorf("repo is required")
 	}
 	return nil
