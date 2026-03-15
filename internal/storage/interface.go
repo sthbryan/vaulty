@@ -35,6 +35,10 @@ type Storage interface {
 
 	GetResource(ctx context.Context, path string) ([]byte, error)
 	PutResource(ctx context.Context, path string, data []byte) error
+	DeleteResource(ctx context.Context, path string) error
+	ListResources(ctx context.Context) ([]string, error)
+
+	ListMetadata(ctx context.Context) ([]string, error)
 
 	IsLocal() bool
 	GetRepo() string
