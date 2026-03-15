@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -45,7 +44,7 @@ func runDeleteConfig(cmd *cobra.Command, args []string) error {
 }
 
 func runDeleteResourceOrConfig(name, baseDir string) error {
-	cfg, client, err := getConfigAndClient()
+	s, cfg, err := getStorageForDelete()
 	if err != nil {
 		return err
 	}
@@ -66,15 +65,10 @@ func runDeleteResourceOrConfig(name, baseDir string) error {
 		remotePath = fmt.Sprintf("%s/%s.vty", baseDir, name)
 	}
 
-	owner, repo, err := github.ParseRepo(cfg.Repo)
-	if err != nil {
-		return fmt.Errorf("parsing repo: %w", err)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	content, err := client.GetContent(ctx, owner, repo, remotePath)
+	_, err = s.GetResource(ctx, remotePath)
 	if err != nil {
 		return fmt.Errorf("resource not found: %s (try with --tag flag)", remotePath)
 	}
@@ -88,7 +82,7 @@ func runDeleteResourceOrConfig(name, baseDir string) error {
 		}
 	}
 
-	err = client.DeleteContent(ctx, owner, repo, remotePath, content.Sha)
+	err = s.DeleteResource(ctx, remotePath)
 	if err != nil {
 		return fmt.Errorf("failed to delete: %w", err)
 	}
