@@ -159,6 +159,23 @@ func (g *GitHubStorage) ListEnvs(ctx context.Context) ([]string, error) {
 	return []string{}, nil
 }
 
+func (g *GitHubStorage) ListEnvSecrets(ctx context.Context, env string) ([]string, error) {
+	envPath := fmt.Sprintf("envs/%s", env)
+	items, err := g.client.ListDirectory(ctx, g.owner, g.repo, envPath)
+	if err != nil {
+		return []string{}, nil
+	}
+
+	var secrets []string
+	for _, item := range items {
+		if strings.HasSuffix(item.Name, ".vty") {
+			secrets = append(secrets, strings.TrimSuffix(item.Name, ".vty"))
+		}
+	}
+
+	return secrets, nil
+}
+
 func (g *GitHubStorage) PutEnv(ctx context.Context, env, name string, data []byte) error {
 	var path string
 	if env == "" {

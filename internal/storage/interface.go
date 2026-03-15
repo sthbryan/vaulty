@@ -29,6 +29,7 @@ type Storage interface {
 	DeleteSSHKey(ctx context.Context, username, keyName, sha string) error
 
 	ListEnvs(ctx context.Context) ([]string, error)
+	ListEnvSecrets(ctx context.Context, env string) ([]string, error)
 	PutEnv(ctx context.Context, env, name string, data []byte) error
 	GetEnv(ctx context.Context, env, name string) ([]byte, error)
 	DeleteEnv(ctx context.Context, env, name string) error
