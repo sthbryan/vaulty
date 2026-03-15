@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -94,7 +95,7 @@ func init() {
 	deleteVaultCmd.Flags().BoolVarP(&deleteForce, "force", "f", false, "Force delete without confirmation")
 }
 
-func getConfigAndClient() (*config.Config, *github.Client, error) {
+func getStorageForDelete() (storage.Storage, *config.Config, error) {
 	cfg, err := config.Load("")
 	if err != nil {
 		return nil, nil, err
@@ -104,11 +105,16 @@ func getConfigAndClient() (*config.Config, *github.Client, error) {
 		return nil, nil, err
 	}
 
+	if cfg.IsLocalMode() {
+		s, err := storage.NewLocalStorage()
+		return s, cfg, err
+	}
+
 	token, err := github.GetGitHubToken()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	client := github.NewClient(token)
-	return cfg, client, nil
+	s, err := storage.NewGitHubStorage(token, cfg.Repo)
+	return s, cfg, err
 }
