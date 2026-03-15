@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -17,17 +16,12 @@ func runDeleteEnv(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("name cannot contain path separators")
 	}
 
-	cfg, client, err := getConfigAndClient()
+	s, cfg, err := getStorageForDelete()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	ctx := context.Background()
-
-	owner, repoName, err := github.ParseRepo(cfg.Repo)
-	if err != nil {
-		return fmt.Errorf("invalid repo format: %w", err)
-	}
 
 	var path string
 	if deleteEnv != "" {
@@ -36,8 +30,8 @@ func runDeleteEnv(cmd *cobra.Command, args []string) error {
 		path = fmt.Sprintf("envs/%s.vty", name)
 	}
 
-	content, err := client.GetContent(ctx, owner, repoName, path)
-	if err != nil || content == nil {
+	_, err = s.GetEnv(ctx, deleteEnv, name)
+	if err != nil {
 		return fmt.Errorf("secret not found: %s", name)
 	}
 
@@ -63,9 +57,9 @@ func runDeleteEnv(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	ui.PrintInfo("Deleting from GitHub...")
+	ui.PrintInfo("Deleting...")
 
-	if err := client.DeleteContent(ctx, owner, repoName, path, content.Sha); err != nil {
+	if err := s.DeleteEnv(ctx, deleteEnv, name); err != nil {
 		return fmt.Errorf("failed to delete: %w", err)
 	}
 
@@ -84,61 +78,35 @@ func runDeleteEnvs(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("the --env flag is required for this command")
 	}
 
-	cfg, client, err := getConfigAndClient()
+	s, cfg, err := getStorageForDelete()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	ctx := context.Background()
 
-	owner, repoName, err := github.ParseRepo(cfg.Repo)
-	if err != nil {
-		return fmt.Errorf("invalid repo format: %w", err)
-	}
-
-	envPath := fmt.Sprintf("envs/%s", deleteEnv)
-	items, err := client.ListDirectory(ctx, owner, repoName, envPath)
+	secrets, err := s.ListEnvSecrets(ctx, deleteEnv)
 	if err != nil {
 		return fmt.Errorf("failed to list environment: %w", err)
 	}
 
-	var secretsToDelete []struct {
-		name string
-		path string
-		sha  string
-	}
-
-	for _, item := range items {
-		if strings.HasSuffix(item.Name, ".vty") {
-			secretsToDelete = append(secretsToDelete, struct {
-				name string
-				path string
-				sha  string
-			}{
-				name: strings.TrimSuffix(item.Name, ".vty"),
-				path: fmt.Sprintf("%s/%s", envPath, item.Name),
-				sha:  item.Sha,
-			})
-		}
-	}
-
-	if len(secretsToDelete) == 0 {
+	if len(secrets) == 0 {
 		ui.PrintInfo("No secrets found in environment: %s", deleteEnv)
 		return nil
 	}
 
 	fmt.Println()
-	ui.PrintWarning("You are about to delete %d secrets from environment: %s", len(secretsToDelete), deleteEnv)
+	ui.PrintWarning("You are about to delete %d secrets from environment: %s", len(secrets), deleteEnv)
 	ui.PrintInfo("Repository: %s", cfg.Repo)
 	fmt.Println()
 
-	for _, secret := range secretsToDelete {
-		ui.PrintInfo("  - %s", secret.name)
+	for _, secret := range secrets {
+		ui.PrintInfo("  - %s", secret)
 	}
 	fmt.Println()
 
 	if !deleteForce {
-		confirmed, err := ui.AskConfirm(fmt.Sprintf("Are you sure you want to delete %d secrets from %s?", len(secretsToDelete), deleteEnv), false)
+		confirmed, err := ui.AskConfirm(fmt.Sprintf("Are you sure you want to delete %d secrets from %s?", len(secrets), deleteEnv), false)
 		if err != nil {
 			return fmt.Errorf("confirmation failed: %w", err)
 		}
@@ -148,21 +116,21 @@ func runDeleteEnvs(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	ui.PrintInfo("Deleting secrets from GitHub...")
+	ui.PrintInfo("Deleting secrets...")
 	deletedCount := 0
 
-	for _, secret := range secretsToDelete {
-		err := client.DeleteContent(ctx, owner, repoName, secret.path, secret.sha)
+	for _, secret := range secrets {
+		err := s.DeleteEnv(ctx, deleteEnv, secret)
 		if err != nil {
-			logger.Warn("failed to delete secret", "name", secret.name, "error", err)
+			logger.Warn("failed to delete secret", "name", secret, "error", err)
 			continue
 		}
 		deletedCount++
-		ui.PrintInfo("  Deleted: %s", secret.name)
+		ui.PrintInfo("  Deleted: %s", secret)
 	}
 
 	fmt.Println()
-	ui.PrintSuccess("Deleted %d/%d secrets from environment: %s", deletedCount, len(secretsToDelete), deleteEnv)
+	ui.PrintSuccess("Deleted %d/%d secrets from environment: %s", deletedCount, len(secrets), deleteEnv)
 	fmt.Println()
 
 	return nil
