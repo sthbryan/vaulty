@@ -36,6 +36,15 @@ Requires an active session (use 'vty login' first).`,
 	infoEnv string
 )
 
+type ResourceInfo struct {
+	Name        string
+	Type        models.SecretType
+	Tag         string
+	IsEncrypted bool
+	IsDirectory bool
+	Size        int64
+}
+
 func fetchAndDecryptVtyFile(ctx context.Context, client *github.Client, owner, repo, path string, masterKey []byte) ([]byte, error) {
 	content, err := client.GetContent(ctx, owner, repo, path)
 	if err != nil {
@@ -99,15 +108,6 @@ func listEnvSecrets(ctx context.Context, client *github.Client, owner, repo, env
 	}
 
 	return secrets, nil
-}
-
-type ResourceInfo struct {
-	Name        string
-	Type        models.SecretType
-	Tag         string
-	IsEncrypted bool
-	IsDirectory bool
-	Size        int64
 }
 
 func listResources(ctx context.Context, client *github.Client, owner, repo, baseDir string) ([]ResourceInfo, error) {
@@ -208,7 +208,7 @@ func listSecretsByEnvironment(ctx context.Context, client *github.Client, cfg *c
 	return allSecrets, nil
 }
 
-func runInfoLocal(cmd *cobra.Command, args []string, cfg *config.Config, s storage.Storage) error {
+func runInfoLocal(_ *cobra.Command, _ []string, cfg *config.Config, s storage.Storage) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -326,6 +326,35 @@ func runInfoLocal(cmd *cobra.Command, args []string, cfg *config.Config, s stora
 		return nil
 	}
 
+	for _, r := range resources {
+		secrets = append(secrets, models.SecretInfo{
+			Name:        r.Name,
+			Type:        r.Type,
+			Environment: r.Tag,
+			Size:        r.Size,
+		})
+	}
+
+	for _, c := range configs {
+		secrets = append(secrets, models.SecretInfo{
+			Name:        c.Name,
+			Type:        c.Type,
+			Environment: c.Tag,
+			Size:        c.Size,
+		})
+	}
+
+	sshList, err := s.ListSSHKeys(ctx, cfg.CurrentUser)
+	if err == nil {
+		for _, key := range sshList {
+			sshKeys = append(sshKeys, github.SSHKeyInfo{
+				Username: key.Username,
+				KeyName:  key.KeyName,
+				Size:     key.Size,
+			})
+		}
+	}
+
 	sort.Slice(secrets, func(i, j int) bool {
 		if secrets[i].Type == secrets[j].Type {
 			return secrets[i].Name < secrets[j].Name
@@ -344,7 +373,7 @@ func runInfoLocal(cmd *cobra.Command, args []string, cfg *config.Config, s stora
 		MasterKey: nil,
 	}
 
-	renderDetailedVaultInfo(cfg, sess, secrets, sshKeys, resources, configs, cfg.UpdatedAt)
+	renderDetailedVaultInfo(cfg, sess, secrets, sshKeys, cfg.UpdatedAt)
 	return nil
 }
 
@@ -439,81 +468,45 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		return secrets[i].Type < secrets[j].Type
 	})
 
-	renderDetailedVaultInfo(cfg, sess, secrets, sshKeys, resources, configs, cfg.UpdatedAt)
+	renderDetailedVaultInfo(cfg, sess, secrets, sshKeys, cfg.UpdatedAt)
 	return nil
 }
 
-func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets []models.SecretInfo, sshKeys []github.SSHKeyInfo, resources []ResourceInfo, configs []ResourceInfo, lastSync time.Time) {
+func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets []models.SecretInfo, sshKeys []github.SSHKeyInfo, lastSync time.Time) {
 	fmt.Println()
 
 	fmt.Println(ui.MutedStyle.Render("User: " + sess.Username + " (" + sess.Role + ")"))
 	fmt.Println()
 
 	if sess.Role == "owner" && cfg.Metadata != nil && len(cfg.Metadata.Users) > 0 {
-		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== USERS ==="))
 		renderUsersTable(cfg.Metadata.Users)
 		fmt.Println()
 	}
 
-	envSecretsByEnv := make(map[string][]models.SecretInfo)
-	var envOrder []string
-	var sshSecrets []models.SecretInfo
+	secretsByType := make(map[models.SecretType][]models.SecretInfo)
 	for _, s := range secrets {
-		if s.Type == models.SecretTypeSSH {
-			sshSecrets = append(sshSecrets, s)
-		} else {
-			env := s.Environment
-			if env == "" {
-				env = "shared"
-			}
-			if _, exists := envSecretsByEnv[env]; !exists {
-				envOrder = append(envOrder, env)
-			}
-			envSecretsByEnv[env] = append(envSecretsByEnv[env], s)
-		}
+		secretsByType[s.Type] = append(secretsByType[s.Type], s)
 	}
 
-	sort.Slice(envOrder, func(i, j int) bool {
-		if envOrder[i] == "shared" {
-			return true
-		}
-		if envOrder[j] == "shared" {
-			return false
-		}
-		return envOrder[i] < envOrder[j]
-	})
-
-	for _, env := range envOrder {
-		sort.Slice(envSecretsByEnv[env], func(i, j int) bool {
-			return envSecretsByEnv[env][i].Name < envSecretsByEnv[env][j].Name
+	var vaultSecrets []models.SecretInfo
+	for _, t := range []models.SecretType{models.SecretTypeEnv, models.SecretTypeResource, models.SecretTypeConfig} {
+		vaultSecrets = append(vaultSecrets, secretsByType[t]...)
+	}
+	if len(vaultSecrets) > 0 {
+		sort.Slice(vaultSecrets, func(i, j int) bool {
+			if vaultSecrets[i].Environment == vaultSecrets[j].Environment {
+				return vaultSecrets[i].Name < vaultSecrets[j].Name
+			}
+			return vaultSecrets[i].Environment < vaultSecrets[j].Environment
 		})
-	}
-
-	if len(envSecretsByEnv) > 0 {
-		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== ENVIRONMENT VARIABLES ==="))
-		for _, env := range envOrder {
-			envSecrets := envSecretsByEnv[env]
-			fmt.Printf("\n[%s]\n", ui.HighlightStyle.Render(env))
-			renderSecretsTable(envSecrets)
-		}
+		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== VAULT ==="))
+		renderSecretsTable(vaultSecrets)
 		fmt.Println()
 	}
 
 	if len(sshKeys) > 0 {
 		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== SSH KEYS ==="))
 		renderSSHKeysTable(sshKeys, sess.Role)
-		fmt.Println()
-	}
-
-	if len(resources) > 0 {
-		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== RESOURCES ==="))
-		renderResourcesTable(resources)
-		fmt.Println()
-	}
-
-	if len(configs) > 0 {
-		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== CONFIG ==="))
-		renderResourcesTable(configs)
 		fmt.Println()
 	}
 
@@ -588,18 +581,10 @@ func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets 
 }
 
 func renderUsersTable(users []config.UserEntry) {
+
 	t := table.New().
 		Border(lipgloss.NormalBorder()).
 		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-		StyleFunc(func(row, col int) lipgloss.Style {
-			if row == 0 {
-				return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary))
-			}
-			if row%2 == 0 {
-				return lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
-			}
-			return lipgloss.NewStyle()
-		}).
 		Headers("USERNAME", "ROLE", "CREATED")
 
 	for _, user := range users {
@@ -610,6 +595,7 @@ func renderUsersTable(users []config.UserEntry) {
 		)
 	}
 
+	fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== USERS ==="))
 	fmt.Println(t.Render())
 }
 
@@ -617,21 +603,36 @@ func renderSecretsTable(secrets []models.SecretInfo) {
 	t := table.New().
 		Border(lipgloss.NormalBorder()).
 		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-		StyleFunc(func(row, col int) lipgloss.Style {
-			if row == 0 {
-				return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary))
-			}
-			if row%2 == 0 {
-				return lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
-			}
-			return lipgloss.NewStyle()
-		}).
-		Headers("NAME", "TYPE", "SIZE", "UPDATED")
+		Headers("NAME", "TYPE", "ENV", "TAG", "SIZE", "UPDATED")
 
 	for _, secret := range secrets {
+		env := secret.Environment
+		tag := "-"
+
+		switch secret.Type {
+		case models.SecretTypeEnv:
+			if env == "" {
+				env = "shared"
+			}
+			tag = "-"
+		case models.SecretTypeResource, models.SecretTypeConfig:
+			if env != "" && env != "config" && env != "resources" {
+				tag = env
+				env = "-"
+			} else {
+				env = "-"
+				tag = "-"
+			}
+		default:
+			env = "-"
+			tag = "-"
+		}
+
 		t.Row(
 			secret.Name,
 			string(secret.Type),
+			env,
+			tag,
 			formatSize(secret.Size),
 			formatTime(secret.UpdatedAt),
 		)
@@ -645,15 +646,6 @@ func renderSSHKeysTable(keys []github.SSHKeyInfo, role string) {
 		t := table.New().
 			Border(lipgloss.NormalBorder()).
 			BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-			StyleFunc(func(row, col int) lipgloss.Style {
-				if row == 0 {
-					return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary))
-				}
-				if row%2 == 0 {
-					return lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
-				}
-				return lipgloss.NewStyle()
-			}).
 			Headers("USERNAME", "KEYNAME", "SIZE")
 
 		for _, key := range keys {
@@ -669,15 +661,6 @@ func renderSSHKeysTable(keys []github.SSHKeyInfo, role string) {
 		t := table.New().
 			Border(lipgloss.NormalBorder()).
 			BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-			StyleFunc(func(row, col int) lipgloss.Style {
-				if row == 0 {
-					return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary))
-				}
-				if row%2 == 0 {
-					return lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
-				}
-				return lipgloss.NewStyle()
-			}).
 			Headers("KEYNAME", "SIZE")
 
 		for _, key := range keys {
@@ -689,47 +672,6 @@ func renderSSHKeysTable(keys []github.SSHKeyInfo, role string) {
 
 		fmt.Println(t.Render())
 	}
-}
-
-func renderResourcesTable(resources []ResourceInfo) {
-	t := table.New().
-		Border(lipgloss.NormalBorder()).
-		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-		StyleFunc(func(row, col int) lipgloss.Style {
-			if row == 0 {
-				return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary))
-			}
-			if row%2 == 0 {
-				return lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
-			}
-			return lipgloss.NewStyle()
-		}).
-		Headers("NAME", "TYPE", "TAG", "ENCRYPTED", "DIR", "SIZE")
-
-	for _, r := range resources {
-		tag := r.Tag
-		if tag == "" {
-			tag = "-"
-		}
-		encrypted := "no"
-		if r.IsEncrypted {
-			encrypted = "yes"
-		}
-		dir := "no"
-		if r.IsDirectory {
-			dir = "yes"
-		}
-		t.Row(
-			r.Name,
-			string(r.Type),
-			tag,
-			encrypted,
-			dir,
-			formatSize(r.Size),
-		)
-	}
-
-	fmt.Println(t.Render())
 }
 
 func formatSize(bytes int64) string {
