@@ -41,6 +41,10 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
+	if cfg.IsLocalMode() {
+		return fmt.Errorf("user management is not supported in local mode. Local vaults are single-owner only")
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("configuration error: %w", err)
 	}
