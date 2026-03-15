@@ -13,6 +13,7 @@ import (
 	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/password"
+	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
@@ -36,6 +37,144 @@ Examples:
   vty recover --user john --seed "word1 word2 ... word12"
   vty recover --user john --file ~/recovery-seed.txt`,
 	RunE: runRecover,
+}
+
+func runRecoverLocal(cmd *cobra.Command, args []string, cfg *config.Config, seedPhrase, username string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	fmt.Println()
+	fmt.Println(ui.TitleStyle.Render("🔐 Set a new master password"))
+	fmt.Println()
+
+	var password1, password2 string
+
+	err := huh.NewInput().
+		Title("New master password").
+		Placeholder("Enter a strong password").
+		EchoMode(huh.EchoModePassword).
+		Value(&password1).
+		Validate(func(s string) error {
+			if len(s) < 8 {
+				return fmt.Errorf("password must be at least 8 characters")
+			}
+			return nil
+		}).
+		Run()
+	if err != nil {
+		return fmt.Errorf("form cancelled")
+	}
+
+	err = huh.NewInput().
+		Title("Confirm password").
+		Placeholder("Re-enter your password").
+		EchoMode(huh.EchoModePassword).
+		Value(&password2).
+		Validate(func(s string) error {
+			if s != password1 {
+				return fmt.Errorf("passwords do not match")
+			}
+			return nil
+		}).
+		Run()
+	if err != nil {
+		return fmt.Errorf("form cancelled")
+	}
+
+	s, err := storage.NewLocalStorage()
+	if err != nil {
+		return fmt.Errorf("local storage: %w", err)
+	}
+
+	recoveryData, err := s.GetRecoverySeed(ctx, username)
+	if err != nil {
+		return fmt.Errorf("recovery data not found for user %s", username)
+	}
+
+	decodedRecovery, err := base64.StdEncoding.DecodeString(string(recoveryData))
+	if err != nil {
+		return fmt.Errorf("decoding recovery data: %w", err)
+	}
+
+	var encryptedData crypto.EncryptedData
+	if err := json.Unmarshal(decodedRecovery, &encryptedData); err != nil {
+		return fmt.Errorf("parsing recovery data: %w", err)
+	}
+
+	recoveredSeed, err := crypto.DecryptRecoverySeed(&encryptedData, seedPhrase)
+	if err != nil {
+		return fmt.Errorf("recovery seed does not match - please verify you have the correct seed for user %s", username)
+	}
+
+	if recoveredSeed != seedPhrase {
+		return fmt.Errorf("recovery seed does not match")
+	}
+
+	masterKey, err := crypto.GenerateMasterKey()
+	if err != nil {
+		return fmt.Errorf("generating master key: %w", err)
+	}
+
+	encryptedMasterKey, err := crypto.EncryptMasterKeyWithPassword(masterKey, password1)
+	if err != nil {
+		return fmt.Errorf("encrypting master key: %w", err)
+	}
+
+	masterKeyJSON, err := json.Marshal(encryptedMasterKey)
+	if err != nil {
+		return fmt.Errorf("marshaling master key: %w", err)
+	}
+
+	err = s.PutUserKeys(ctx, username, masterKeyJSON)
+	if err != nil {
+		return fmt.Errorf("storing user keys: %w", err)
+	}
+
+	newEncryptedSeed, err := crypto.EncryptRecoverySeed(recoveredSeed, password1)
+	if err != nil {
+		return fmt.Errorf("encrypting recovery seed: %w", err)
+	}
+
+	recoverySeedJSON, err := json.Marshal(newEncryptedSeed)
+	if err != nil {
+		return fmt.Errorf("marshaling recovery seed: %w", err)
+	}
+
+	recoverySeedHex, err := crypto.CompressHex(recoverySeedJSON)
+	if err != nil {
+		return fmt.Errorf("compressing recovery seed: %w", err)
+	}
+
+	recoverySeedContent := base64.StdEncoding.EncodeToString([]byte(recoverySeedHex))
+	err = s.PutRecoverySeed(ctx, username, []byte(recoverySeedContent))
+	if err != nil {
+		return fmt.Errorf("storing recovery seed: %w", err)
+	}
+
+	cfg.CurrentUser = username
+	cfg.CurrentUserRole = "owner"
+
+	if err := cfg.Save(""); err != nil {
+		return fmt.Errorf("saving config: %w", err)
+	}
+
+	passStorage, err := password.NewStorage()
+	if err != nil {
+		return fmt.Errorf("password storage: %w", err)
+	}
+
+	if err := passStorage.Set(password1); err != nil {
+		return fmt.Errorf("storing password: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println(ui.SuccessStyle.Render("✅ Recovery successful!"))
+	fmt.Println()
+	fmt.Println(ui.InfoStyle.Render(fmt.Sprintf("Your vault has been recovered with a new password for user: %s", username)))
+	fmt.Println(ui.MutedStyle.Render("Your vault is now ready to use on this machine."))
+	fmt.Println()
+
+	return nil
 }
 
 func runRecover(cmd *cobra.Command, args []string) error {
@@ -71,6 +210,10 @@ func runRecover(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load("")
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
+	}
+
+	if cfg.IsLocalMode() {
+		return runRecoverLocal(cmd, args, cfg, seedPhrase, recoverUsername)
 	}
 
 	if cfg.Repo == "" {
