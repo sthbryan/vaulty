@@ -3,16 +3,22 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 
+	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
 )
 
 func runDeleteVault(cmd *cobra.Command, args []string) error {
-	cfg, client, err := getConfigAndClient()
+	cfg, err := config.Load("")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	if cfg.Repo == "" && !cfg.IsLocalMode() {
+		return fmt.Errorf("Vaulty not initialized. Run 'vty init' first")
 	}
 
 	if !cfg.IsOwner() {
@@ -31,7 +37,12 @@ func runDeleteVault(cmd *cobra.Command, args []string) error {
 	ui.PrintInfo("")
 	ui.PrintWarning("This action CANNOT be undone!")
 	ui.PrintInfo("")
-	ui.PrintInfo("Repository: %s", cfg.Repo)
+
+	if cfg.IsLocalMode() {
+		ui.PrintInfo("Storage: Local (%s)", cfg.LocalVaultPath)
+	} else {
+		ui.PrintInfo("Repository: %s", cfg.Repo)
+	}
 	fmt.Println()
 
 	if !deleteForce {
@@ -47,6 +58,54 @@ func runDeleteVault(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
+	if cfg.IsLocalMode() {
+
+		return deleteLocalVault(cfg, ctx)
+	}
+
+	return deleteCloudVault(cfg, ctx)
+}
+
+func deleteLocalVault(cfg *config.Config, ctx context.Context) error {
+	vaultPath := cfg.LocalVaultPath
+	if vaultPath == "" {
+		vaultPath = cfg.DefaultLocalVaultPath()
+	}
+
+	ui.PrintInfo("Deleting local vault from %s...", vaultPath)
+
+	err := os.RemoveAll(vaultPath)
+	if err != nil {
+		return fmt.Errorf("failed to delete vault directory: %w", err)
+	}
+
+	cfg.SetRepo("")
+	cfg.StorageType = ""
+	cfg.LocalVaultPath = ""
+	cfg.CurrentUser = ""
+	cfg.CurrentUserRole = ""
+	cfg.Metadata = nil
+
+	if err := cfg.Save(""); err != nil {
+		return fmt.Errorf("failed to clear config: %w", err)
+	}
+
+	fmt.Println()
+	ui.PrintSuccess("Vault deleted successfully!")
+	ui.PrintInfo("Deleted local vault from: %s", vaultPath)
+	ui.PrintWarning("You can now reinitialize with 'vty init' or 'vty init --local'")
+	fmt.Println()
+
+	return nil
+}
+
+func deleteCloudVault(cfg *config.Config, ctx context.Context) error {
+	token, err := github.GetGitHubToken()
+	if err != nil {
+		return fmt.Errorf("GitHub authentication: %w", err)
+	}
+
+	client := github.NewClient(token)
 	owner, repoName, err := github.ParseRepo(cfg.Repo)
 	if err != nil {
 		return fmt.Errorf("invalid repo format: %w", err)
@@ -74,10 +133,20 @@ func runDeleteVault(cmd *cobra.Command, args []string) error {
 		ui.PrintInfo("  Deleted: %s", path)
 	}
 
+	cfg.SetRepo("")
+	cfg.StorageType = ""
+	cfg.CurrentUser = ""
+	cfg.CurrentUserRole = ""
+	cfg.Metadata = nil
+
+	if err := cfg.Save(""); err != nil {
+		return fmt.Errorf("failed to clear config: %w", err)
+	}
+
 	fmt.Println()
 	ui.PrintSuccess("Vault deleted successfully!")
 	ui.PrintInfo("Deleted %d/%d items", deletedCount, len(pathsToDelete))
-	ui.PrintWarning("You can now unlink or reinitialize the vault with 'vty unlink' or 'vty init'")
+	ui.PrintWarning("You can now reinitialize with 'vty init'")
 	fmt.Println()
 
 	return nil
