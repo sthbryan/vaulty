@@ -48,6 +48,10 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
+	if cfg.IsLocalMode() {
+		return fmt.Errorf("user management is not supported in local mode. Local vaults are single-owner only")
+	}
+
 	if cfg.Repo == "" {
 		return fmt.Errorf("no vault initialized - run 'vty init' first")
 	}
