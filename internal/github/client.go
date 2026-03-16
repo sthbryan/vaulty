@@ -191,11 +191,22 @@ func (c *Client) ListDirectory(ctx context.Context, owner, repo, path string) ([
 }
 
 func (c *Client) DecodeContent(content *ContentResponse) ([]byte, error) {
-	if content.Encoding != "base64" {
-		return nil, fmt.Errorf("unsupported encoding: %s", content.Encoding)
+	if content.Encoding == "base64" {
+		cleanContent := strings.ReplaceAll(content.Content, "\n", "")
+		return base64.StdEncoding.DecodeString(cleanContent)
 	}
-	cleanContent := strings.ReplaceAll(content.Content, "\n", "")
-	return base64.StdEncoding.DecodeString(cleanContent)
+	if content.Encoding == "none" {
+		if content.DownloadURL == "" {
+			return nil, fmt.Errorf("no download URL available for large file")
+		}
+		resp, err := c.HTTPClient.Get(content.DownloadURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to download large file: %w", err)
+		}
+		defer resp.Body.Close()
+		return io.ReadAll(resp.Body)
+	}
+	return nil, fmt.Errorf("unsupported encoding: %s", content.Encoding)
 }
 
 func (c *Client) EncodeContent(data []byte) string {

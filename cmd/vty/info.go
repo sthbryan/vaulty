@@ -223,12 +223,9 @@ func runInfoLocal(_ *cobra.Command, _ []string, cfg *config.Config, s storage.St
 	metadataData, err := s.GetMetadata(ctx)
 	var metadata *config.Metadata
 	if err == nil && len(metadataData) > 0 {
-		decompressed, err := crypto.DecompressHex(string(metadataData))
-		if err == nil {
-			metadata = &config.Metadata{}
-			if err := json.Unmarshal(decompressed, metadata); err != nil {
-				logger.Debug("Could not parse metadata", "error", err)
-			}
+		metadata = &config.Metadata{}
+		if err := json.Unmarshal(metadataData, metadata); err != nil {
+			logger.Debug("Could not parse metadata", "error", err)
 		}
 	}
 	if metadata == nil {

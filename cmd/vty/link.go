@@ -210,13 +210,8 @@ func runLinkLocal(cfg *config.Config) error {
 		return fmt.Errorf("fetching local vault metadata: %w", err)
 	}
 
-	metadataJSON, err := crypto.DecompressHex(string(metadataBytes))
-	if err != nil {
-		return fmt.Errorf("decompressing metadata: %w", err)
-	}
-
 	var metadata config.Metadata
-	if err := json.Unmarshal(metadataJSON, &metadata); err != nil {
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
 		return fmt.Errorf("parsing metadata: %w", err)
 	}
 

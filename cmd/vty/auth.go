@@ -77,13 +77,8 @@ func authenticateUser(cfg *config.Config, password string) (*session.Session, er
 		return nil, fmt.Errorf("downloading metadata: %w", err)
 	}
 
-	metadataJSON, err := crypto.DecompressHex(string(metadataBytes))
-	if err != nil {
-		return nil, fmt.Errorf("decompressing metadata: %w", err)
-	}
-
 	var metadata config.Metadata
-	if err := json.Unmarshal(metadataJSON, &metadata); err != nil {
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
 		return nil, fmt.Errorf("parsing metadata: %w", err)
 	}
 
