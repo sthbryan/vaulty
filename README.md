@@ -185,7 +185,7 @@ Vaulty stores config at `~/.vty/config.json`. Key settings:
 ### High Priority
 - [x] **Environments** — Native support for develop, staging, and production with isolation
 - [x] **Team Resources** — Share encrypted docs, agents.md, utilities, .config
-- [ ] **Local mode** — Store secrets locally without GitHub sync
+- [x] **Local mode** — Store secrets locally without GitHub sync
 
 ### Medium Priority
 - [ ] **Web Interface** — GUI for managing secrets
