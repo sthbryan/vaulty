@@ -3,20 +3,20 @@ package ui
 import "github.com/charmbracelet/lipgloss"
 
 const (
-	Primary   = "#6366F1"
-	Secondary = "#8B5CF6"
-	Success   = "#10B981"
+	Primary   = "#F97316"
+	Secondary = "#DC2626"
+	Success   = "#22C55E"
 	Warning   = "#F59E0B"
 	Error     = "#EF4444"
-	Info      = "#3B82F6"
-	Muted     = "#6B7280"
-	Dark      = "#1F2937"
-	Light     = "#F3F4F6"
+	Info      = "#EA580C"
+	Muted     = "#9CA3AF"
+	Dark      = "#1F1F1F"
+	Light     = "#FEF3E2"
 
-	EnvColor      = "#10B981"
-	SSHColor      = "#3B82F6"
+	EnvColor      = "#F97316"
+	SSHColor      = "#DC2626"
 	ResourceColor = "#F59E0B"
-	ConfigColor   = "#EC4899"
+	ConfigColor   = "#B45309"
 )
 
 var (
@@ -63,13 +63,13 @@ var (
 
 	TableHeaderNewStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("#9CA3AF"))
+				Foreground(lipgloss.Color(Warning))
 
 	TableRowStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#D1D5DB"))
+			Foreground(lipgloss.Color(Light))
 
 	TableRowAltStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#E5E7EB"))
+				Foreground(lipgloss.Color(ResourceColor))
 
 	TypeEnvStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(EnvColor)).
