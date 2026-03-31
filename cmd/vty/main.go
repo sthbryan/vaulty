@@ -20,17 +20,8 @@ var rootCmd = &cobra.Command{
 	Use:   "vty",
 	Short: "🔐 Vaulty - Secure environment and SSH key vault",
 	Long: `Vaulty is a secure vault for managing environment variables, SSH keys, and team resources.
-
-It provides a safe way to store, retrieve, and inject sensitive configuration
-into your development workflow. Vaulty supports:
-
-  • Secure storage of environment variables
-  • SSH key management and injection
-  • Team resources and config storage
-  • GitHub as storage backend
-  • Easy migration between machines
-
-Use "vty [command] --help" for more information about a command.`,
+	
+	Use "vty [command] --help" for more information about a command.`,
 	Version: fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date),
 }
 
@@ -40,7 +31,37 @@ func init() {
 		ReportTimestamp: false,
 		Level:           log.InfoLevel,
 	})
-	rootCmd.AddCommand(configCmd)
+
+	rootCmd.AddGroup(
+		&cobra.Group{ID: "secrets", Title: "Secret Management"},
+		&cobra.Group{ID: "vault", Title: "Vault Operations"},
+		&cobra.Group{ID: "config", Title: "Configuration"},
+		&cobra.Group{ID: "account", Title: "Account"},
+		&cobra.Group{ID: "team", Title: "Team Management (owner only)"},
+	)
+
+	configCmd.GroupID = "config"
+
+	pushCmd.GroupID = "secrets"
+	pullCmd.GroupID = "secrets"
+	showCmd.GroupID = "secrets"
+	runCmd.GroupID = "secrets"
+	deleteCmd.GroupID = "secrets"
+
+	exportCmd.GroupID = "vault"
+	importCmd.GroupID = "vault"
+	infoCmd.GroupID = "vault"
+
+	loginCmd.GroupID = "account"
+	logoutCmd.GroupID = "account"
+	initCmd.GroupID = "account"
+	linkCmd.GroupID = "account"
+	unlinkCmd.GroupID = "account"
+
+	addUserCmd.GroupID = "team"
+	removeUserCmd.GroupID = "team"
+	transferOwnerCmd.GroupID = "team"
+	recoverCmd.GroupID = "team"
 }
 
 func main() {
