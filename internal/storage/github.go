@@ -328,3 +328,47 @@ func (g *GitHubStorage) ListMetadata(ctx context.Context) ([]string, error) {
 
 	return files, nil
 }
+
+func (g *GitHubStorage) GetOwner() string {
+	return g.owner
+}
+
+func (g *GitHubStorage) GetOwnerAndRepo() (string, string, error) {
+	return g.owner, g.repo, nil
+}
+
+func (g *GitHubStorage) PutContent(ctx context.Context, path string, content string) error {
+	req := github.ContentRequest{
+		Message: "Update content",
+		Content: content,
+	}
+	return g.client.PutContent(ctx, g.owner, g.repo, path, req)
+}
+
+func (g *GitHubStorage) GetContent(ctx context.Context, path string) (*github.ContentResponse, error) {
+	return g.client.GetContent(ctx, g.owner, g.repo, path)
+}
+
+func (g *GitHubStorage) DecodeContent(content *github.ContentResponse) ([]byte, error) {
+	return g.client.DecodeContent(content)
+}
+
+func (g *GitHubStorage) DeleteContent(ctx context.Context, path string, sha string) error {
+	return g.client.DeleteContent(ctx, g.owner, g.repo, path, sha)
+}
+
+func (g *GitHubStorage) ListDirectory(ctx context.Context, path string) ([]ContentInfo, error) {
+	items, err := g.client.ListDirectory(ctx, g.owner, g.repo, path)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]ContentInfo, len(items))
+	for i, item := range items {
+		result[i] = ContentInfo{
+			Name: item.Name,
+			Sha:  item.Sha,
+		}
+	}
+	return result, nil
+}

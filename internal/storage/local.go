@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/DeadBryam/vaulty/internal/crypto"
+	"github.com/DeadBryam/vaulty/internal/github"
 )
 
 type LocalStorage struct {
@@ -487,4 +488,64 @@ func (l *LocalStorage) ListMetadata(ctx context.Context) ([]string, error) {
 	}
 
 	return files, nil
+}
+
+func (l *LocalStorage) GetOwner() string {
+	return "local"
+}
+
+func (l *LocalStorage) GetOwnerAndRepo() (string, string, error) {
+	return "local", "local", nil
+}
+
+func (l *LocalStorage) PutContent(ctx context.Context, path string, content string) error {
+	fullPath := filepath.Join(l.baseDir, path)
+	dir := filepath.Dir(fullPath)
+	if err := l.ensureDir(dir); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+	return os.WriteFile(fullPath, []byte(content), 0600)
+}
+
+func (l *LocalStorage) GetContent(ctx context.Context, path string) (*github.ContentResponse, error) {
+	fullPath := filepath.Join(l.baseDir, path)
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+	return &github.ContentResponse{
+		Content: string(data),
+		Sha:     "",
+	}, nil
+}
+
+func (l *LocalStorage) DecodeContent(content *github.ContentResponse) ([]byte, error) {
+	return []byte(content.Content), nil
+}
+
+func (l *LocalStorage) DeleteContent(ctx context.Context, path string, sha string) error {
+	fullPath := filepath.Join(l.baseDir, path)
+	return os.Remove(fullPath)
+}
+
+func (l *LocalStorage) ListDirectory(ctx context.Context, path string) ([]ContentInfo, error) {
+	fullPath := filepath.Join(l.baseDir, path)
+	entries, err := os.ReadDir(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list directory: %w", err)
+	}
+
+	var result []ContentInfo
+	for _, entry := range entries {
+		info, _ := entry.Info()
+		sha := ""
+		if info != nil {
+			sha = fmt.Sprintf("%x", info.Size())
+		}
+		result = append(result, ContentInfo{
+			Name: entry.Name(),
+			Sha:  sha,
+		})
+	}
+	return result, nil
 }
