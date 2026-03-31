@@ -243,13 +243,13 @@ func (l *LocalStorage) ListEnvSecrets(ctx context.Context, env string) ([]string
 		return []string{}, nil
 	}
 
-	basePath := filepath.Join(l.baseDir, "envs")
-	entries, err := os.ReadDir(basePath)
+	envPath := filepath.Join(l.baseDir, "envs", env)
+	entries, err := os.ReadDir(envPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []string{}, nil
 		}
-		return nil, fmt.Errorf("failed to read envs directory: %w", err)
+		return nil, fmt.Errorf("failed to read env directory: %w", err)
 	}
 
 	var secrets []string
@@ -259,10 +259,7 @@ func (l *LocalStorage) ListEnvSecrets(ctx context.Context, env string) ([]string
 		}
 		name := entry.Name()
 		if strings.HasSuffix(name, ".vty") {
-			secretName := strings.TrimSuffix(name, ".vty")
-			if secretName == env {
-				secrets = append(secrets, secretName)
-			}
+			secrets = append(secrets, strings.TrimSuffix(name, ".vty"))
 		}
 	}
 

@@ -150,13 +150,32 @@ func (g *GitHubStorage) GetRepo() string {
 }
 
 func (g *GitHubStorage) ListEnvs(ctx context.Context) ([]string, error) {
-
-	_, err := g.client.GetContent(ctx, g.owner, g.repo, "envs")
+	items, err := g.client.ListDirectory(ctx, g.owner, g.repo, "envs")
 	if err != nil {
 		return []string{}, nil
 	}
 
-	return []string{}, nil
+	envs := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		envName := ""
+		if item.Type == "dir" {
+			envName = item.Name
+		} else if strings.HasSuffix(item.Name, ".vty") {
+			envName = strings.TrimSuffix(item.Name, ".vty")
+		}
+
+		if envName == "" {
+			continue
+		}
+		if _, exists := seen[envName]; exists {
+			continue
+		}
+		seen[envName] = struct{}{}
+		envs = append(envs, envName)
+	}
+
+	return envs, nil
 }
 
 func (g *GitHubStorage) ListEnvSecrets(ctx context.Context, env string) ([]string, error) {
