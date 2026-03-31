@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/crypto"
-	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/password"
 	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/DeadBryam/vaulty/internal/ui"
@@ -39,7 +37,143 @@ Examples:
 	RunE: runRecover,
 }
 
-func runRecoverLocal(cmd *cobra.Command, args []string, cfg *config.Config, seedPhrase, username string) error {
+func resolveUserRoleFromMetadata(ctx context.Context, s storage.Storage, username string) (string, error) {
+	metadataBytes, err := s.GetMetadata(ctx)
+	if err != nil {
+		return "", fmt.Errorf("downloading metadata: %w", err)
+	}
+
+	var metadata config.Metadata
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		return "", fmt.Errorf("parsing metadata: %w", err)
+	}
+
+	for _, user := range metadata.Users {
+		if user.Username == username {
+			if user.Role == "" {
+				return "", fmt.Errorf("user %q has no role in metadata", username)
+			}
+			return user.Role, nil
+		}
+	}
+
+	return "", fmt.Errorf("user %q not found in vault metadata", username)
+}
+
+func completeRecovery(ctx context.Context, cfg *config.Config, username, seedPhrase, newPassword string) error {
+	factory := storage.NewFactory(cfg)
+	s, err := factory.CreateStorage()
+	if err != nil {
+		return fmt.Errorf("creating storage: %w", err)
+	}
+
+	recoveryData, err := s.GetRecoverySeed(ctx, username)
+	if err != nil {
+		return fmt.Errorf("recovery data not found for user %s", username)
+	}
+
+	recoveryJSON, err := crypto.DecompressHex(string(recoveryData))
+	if err != nil {
+		return fmt.Errorf("decompressing recovery data: %w", err)
+	}
+
+	var encryptedData crypto.EncryptedData
+	if err := json.Unmarshal(recoveryJSON, &encryptedData); err != nil {
+		return fmt.Errorf("parsing recovery data: %w", err)
+	}
+
+	recoveredSeed, err := crypto.DecryptRecoverySeed(&encryptedData, seedPhrase)
+	if err != nil {
+		return fmt.Errorf("recovery seed does not match - please verify you have the correct seed for user %s", username)
+	}
+
+	if recoveredSeed != seedPhrase {
+		return fmt.Errorf("recovery seed does not match")
+	}
+
+	userKeyData, err := s.GetUserKeys(ctx, username)
+	if err != nil {
+		return fmt.Errorf("fetching user key envelope: %w", err)
+	}
+
+	userKeyJSON, err := crypto.DecompressHex(string(userKeyData))
+	if err != nil {
+		return fmt.Errorf("decompressing user key envelope: %w", err)
+	}
+
+	var currentEncryptedMasterKey crypto.EncryptedData
+	if err := json.Unmarshal(userKeyJSON, &currentEncryptedMasterKey); err != nil {
+		return fmt.Errorf("parsing user key envelope: %w", err)
+	}
+
+	masterKey, err := crypto.DecryptMasterKeyWithPassword(&currentEncryptedMasterKey, recoveredSeed)
+	if err != nil {
+		return fmt.Errorf("decrypting existing user key with recovery seed: %w", err)
+	}
+
+	encryptedMasterKey, err := crypto.EncryptMasterKeyWithPassword(masterKey, newPassword)
+	if err != nil {
+		return fmt.Errorf("encrypting master key: %w", err)
+	}
+
+	masterKeyJSON, err := json.Marshal(encryptedMasterKey)
+	if err != nil {
+		return fmt.Errorf("marshaling master key: %w", err)
+	}
+
+	masterKeyHex, err := crypto.CompressHex(masterKeyJSON)
+	if err != nil {
+		return fmt.Errorf("compressing master key: %w", err)
+	}
+
+	if err := s.PutUserKeys(ctx, username, []byte(masterKeyHex)); err != nil {
+		return fmt.Errorf("storing user keys: %w", err)
+	}
+
+	newEncryptedSeed, err := crypto.EncryptRecoverySeed(recoveredSeed, newPassword)
+	if err != nil {
+		return fmt.Errorf("encrypting recovery seed: %w", err)
+	}
+
+	recoverySeedJSON, err := json.Marshal(newEncryptedSeed)
+	if err != nil {
+		return fmt.Errorf("marshaling recovery seed: %w", err)
+	}
+
+	recoverySeedHex, err := crypto.CompressHex(recoverySeedJSON)
+	if err != nil {
+		return fmt.Errorf("compressing recovery seed: %w", err)
+	}
+
+	if err := s.PutRecoverySeed(ctx, username, []byte(recoverySeedHex)); err != nil {
+		return fmt.Errorf("storing recovery seed: %w", err)
+	}
+
+	role, err := resolveUserRoleFromMetadata(ctx, s, username)
+	if err != nil {
+		return err
+	}
+
+	cfg.CurrentUser = username
+	cfg.CurrentUserRole = role
+
+	if err := cfg.Save(""); err != nil {
+		return fmt.Errorf("saving config: %w", err)
+	}
+
+	passStorage, err := password.NewStorage()
+	if err != nil {
+		return fmt.Errorf("password storage: %w", err)
+	}
+
+	if err := passStorage.Set(newPassword); err != nil {
+		return fmt.Errorf("storing password: %w", err)
+	}
+
+	return nil
+}
+
+func runRecoverLocal(cfg *config.Config, seedPhrase, username string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -81,90 +215,8 @@ func runRecoverLocal(cmd *cobra.Command, args []string, cfg *config.Config, seed
 		return fmt.Errorf("form cancelled")
 	}
 
-	s, err := storage.NewLocalStorage()
-	if err != nil {
-		return fmt.Errorf("local storage: %w", err)
-	}
-
-	recoveryData, err := s.GetRecoverySeed(ctx, username)
-	if err != nil {
-		return fmt.Errorf("recovery data not found for user %s", username)
-	}
-
-	decodedRecovery, err := base64.StdEncoding.DecodeString(string(recoveryData))
-	if err != nil {
-		return fmt.Errorf("decoding recovery data: %w", err)
-	}
-
-	var encryptedData crypto.EncryptedData
-	if err := json.Unmarshal(decodedRecovery, &encryptedData); err != nil {
-		return fmt.Errorf("parsing recovery data: %w", err)
-	}
-
-	recoveredSeed, err := crypto.DecryptRecoverySeed(&encryptedData, seedPhrase)
-	if err != nil {
-		return fmt.Errorf("recovery seed does not match - please verify you have the correct seed for user %s", username)
-	}
-
-	if recoveredSeed != seedPhrase {
-		return fmt.Errorf("recovery seed does not match")
-	}
-
-	masterKey, err := crypto.GenerateMasterKey()
-	if err != nil {
-		return fmt.Errorf("generating master key: %w", err)
-	}
-
-	encryptedMasterKey, err := crypto.EncryptMasterKeyWithPassword(masterKey, password1)
-	if err != nil {
-		return fmt.Errorf("encrypting master key: %w", err)
-	}
-
-	masterKeyJSON, err := json.Marshal(encryptedMasterKey)
-	if err != nil {
-		return fmt.Errorf("marshaling master key: %w", err)
-	}
-
-	err = s.PutUserKeys(ctx, username, masterKeyJSON)
-	if err != nil {
-		return fmt.Errorf("storing user keys: %w", err)
-	}
-
-	newEncryptedSeed, err := crypto.EncryptRecoverySeed(recoveredSeed, password1)
-	if err != nil {
-		return fmt.Errorf("encrypting recovery seed: %w", err)
-	}
-
-	recoverySeedJSON, err := json.Marshal(newEncryptedSeed)
-	if err != nil {
-		return fmt.Errorf("marshaling recovery seed: %w", err)
-	}
-
-	recoverySeedHex, err := crypto.CompressHex(recoverySeedJSON)
-	if err != nil {
-		return fmt.Errorf("compressing recovery seed: %w", err)
-	}
-
-	recoverySeedContent := base64.StdEncoding.EncodeToString([]byte(recoverySeedHex))
-	err = s.PutRecoverySeed(ctx, username, []byte(recoverySeedContent))
-	if err != nil {
-		return fmt.Errorf("storing recovery seed: %w", err)
-	}
-
-	cfg.CurrentUser = username
-	cfg.CurrentUserRole = "owner"
-
-	if err := cfg.Save(""); err != nil {
-		return fmt.Errorf("saving config: %w", err)
-	}
-
-	passStorage, err := password.NewStorage()
-	if err != nil {
-		return fmt.Errorf("password storage: %w", err)
-	}
-
-	if err := passStorage.Set(password1); err != nil {
-		return fmt.Errorf("storing password: %w", err)
+	if err := completeRecovery(ctx, cfg, username, seedPhrase, password1); err != nil {
+		return err
 	}
 
 	fmt.Println()
@@ -213,24 +265,13 @@ func runRecover(cmd *cobra.Command, args []string) error {
 	}
 
 	if cfg.IsLocalMode() {
-		return runRecoverLocal(cmd, args, cfg, seedPhrase, recoverUsername)
+		return runRecoverLocal(cfg, seedPhrase, recoverUsername)
 	}
 
 	if cfg.Repo == "" {
 		return fmt.Errorf("no vault configured. Run 'vty init' first")
 	}
 
-	owner, repo, err := github.ParseRepo(cfg.Repo)
-	if err != nil {
-		return fmt.Errorf("invalid repo in config: %w", err)
-	}
-
-	token, err := github.GetGitHubToken()
-	if err != nil {
-		return fmt.Errorf("GitHub authentication: %w", err)
-	}
-
-	client := github.NewClient(token)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -272,107 +313,8 @@ func runRecover(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("form cancelled")
 	}
 
-	recoveryPath := fmt.Sprintf(".vaulty/recovery/%s.recovery.vty", recoverUsername)
-	recoveryResp, err := client.GetContent(ctx, owner, repo, recoveryPath)
-	if err != nil {
-		return fmt.Errorf("recovery data not found for user %s", recoverUsername)
-	}
-
-	recoveryData, err := client.DecodeContent(recoveryResp)
-	if err != nil {
-		return fmt.Errorf("decoding recovery data: %w", err)
-	}
-
-	decodedRecovery, err := base64.StdEncoding.DecodeString(string(recoveryData))
-	if err != nil {
-		return fmt.Errorf("decoding recovery data: %w", err)
-	}
-
-	var encryptedData crypto.EncryptedData
-	if err := json.Unmarshal(decodedRecovery, &encryptedData); err != nil {
-		return fmt.Errorf("parsing recovery data: %w", err)
-	}
-
-	recoveredSeed, err := crypto.DecryptRecoverySeed(&encryptedData, seedPhrase)
-	if err != nil {
-		return fmt.Errorf("recovery seed does not match - please verify you have the correct seed for user %s", recoverUsername)
-	}
-
-	if recoveredSeed != seedPhrase {
-		return fmt.Errorf("recovery seed does not match")
-	}
-
-	masterKey, err := crypto.GenerateMasterKey()
-	if err != nil {
-		return fmt.Errorf("generating master key: %w", err)
-	}
-
-	encryptedMasterKey, err := crypto.EncryptMasterKeyWithPassword(masterKey, password1)
-	if err != nil {
-		return fmt.Errorf("encrypting master key: %w", err)
-	}
-
-	masterKeyJSON, err := json.Marshal(encryptedMasterKey)
-	if err != nil {
-		return fmt.Errorf("marshaling master key: %w", err)
-	}
-
-	masterKeyBase64 := base64.StdEncoding.EncodeToString(masterKeyJSON)
-	masterKeyPath := fmt.Sprintf(".vaulty/keys/%s.key.vty", recoverUsername)
-
-	existingKey, err := client.GetContent(ctx, owner, repo, masterKeyPath)
-	if err == nil && existingKey != nil {
-		masterKeyPath = fmt.Sprintf(".vaulty/keys/%s.key.vty", recoverUsername)
-	}
-
-	err = client.PutContent(ctx, owner, repo, masterKeyPath, github.ContentRequest{
-		Message: fmt.Sprintf("Update master key for %s via recovery", recoverUsername),
-		Content: masterKeyBase64,
-		Sha:     existingKey.Sha,
-	})
-	if err != nil {
-		return fmt.Errorf("uploading master key: %w", err)
-	}
-
-	newEncryptedSeed, err := crypto.EncryptRecoverySeed(recoveredSeed, password1)
-	if err != nil {
-		return fmt.Errorf("encrypting recovery seed: %w", err)
-	}
-
-	recoverySeedJSON, err := json.Marshal(newEncryptedSeed)
-	if err != nil {
-		return fmt.Errorf("marshaling recovery seed: %w", err)
-	}
-
-	recoverySeedHex, err := crypto.CompressHex(recoverySeedJSON)
-	if err != nil {
-		return fmt.Errorf("compressing recovery seed: %w", err)
-	}
-
-	recoverySeedContent := base64.StdEncoding.EncodeToString([]byte(recoverySeedHex))
-	err = client.PutContent(ctx, owner, repo, recoveryPath, github.ContentRequest{
-		Message: fmt.Sprintf("Update recovery seed for %s via recovery", recoverUsername),
-		Content: recoverySeedContent,
-		Sha:     recoveryResp.Sha,
-	})
-	if err != nil {
-		return fmt.Errorf("uploading recovery seed: %w", err)
-	}
-
-	cfg.CurrentUser = recoverUsername
-	cfg.CurrentUserRole = "owner"
-
-	if err := cfg.Save(""); err != nil {
-		return fmt.Errorf("saving config: %w", err)
-	}
-
-	passStorage, err := password.NewStorage()
-	if err != nil {
-		return fmt.Errorf("password storage: %w", err)
-	}
-
-	if err := passStorage.Set(password1); err != nil {
-		return fmt.Errorf("storing password: %w", err)
+	if err := completeRecovery(ctx, cfg, recoverUsername, seedPhrase, password1); err != nil {
+		return err
 	}
 
 	fmt.Println()
