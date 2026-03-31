@@ -145,28 +145,15 @@ Quick reference. See **[USAGE.md](USAGE.md)** for complete details on all flags 
 
 | Command | Purpose |
 |---------|---------|
-| `vty init` | Initialize vault with GitHub repository |
-| `vty login` / `vty logout` | Manage sessions |
-| `vty link` | Link to existing vault repository |
-| `vty unlink` | Unlink current repository |
-| `vty push env <name> <path>` | Upload environment file |
-| `vty push ssh <name> <path>` | Upload SSH key |
-| `vty push resource <name> <path>` | Upload file/directory to resources |
-| `vty push config <name> <path>` | Upload file/directory to config |
-| `vty pull env <name>` | Download environment file |
-| `vty pull ssh <name>` | Download SSH key |
-| `vty pull resource <name>` | Download file/directory from resources |
-| `vty pull config <name>` | Download file/directory from config |
-| `vty info` | Show vault contents |
-| `vty delete env <name>` | Delete environment |
-| `vty delete ssh <name>` | Delete SSH key |
-| `vty delete resource <name>` | Delete resource |
-| `vty delete config <name>` | Delete config |
-| `vty add-user <user>` | Add team member (owner only) |
-| `vty remove-user <user>` | Remove user and rotate keys (owner only) |
-| `vty transfer-owner <user>` | Transfer ownership (owner only) |
-| `vty recover --user <user> --seed "..."` | Recover vault using seed phrase |
-| `vty config cache-duration [time]` | Configure password cache |
+| **Init** | `init`, `link`, `unlink`, `login`, `logout` |
+| **Push** | `push env`, `push ssh`, `push resource`, `push config` |
+| **Pull** | `pull env`, `pull ssh`, `pull resource`, `pull config` |
+| **Show** | `show env`, `show ssh`, `show resource`, `show config` |
+| **Run** | `run env <name> [-- <cmd>]` — inject secrets into commands |
+| **Backup** | `export`, `import` — full vault backup/restore |
+| **Delete** | `delete env`, `delete ssh`, `delete resource`, `delete config` |
+| **Team** | `add-user`, `remove-user`, `transfer-owner`, `recover` |
+| **Other** | `info`, `config` |
 
 ---
 
@@ -196,6 +183,7 @@ Vaulty stores config at `~/.vty/config.json`. Key settings:
 ### Low Priority
 - [x] **Reset/Clean** — **DESTRUCTIVE** Vault reset (requires seed phrase confirmation)
 - [x] **CI/CD Integration** — Inject secrets into pipelines without .env files
+- [x] **Export/Import** — Backup and restore vault state with encryption
 - [ ] **Audit Logging** — Compliance tracking
 - [ ] **External Integration** — AWS Secrets Manager, Azure Key Vault
 
