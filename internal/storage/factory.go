@@ -16,8 +16,24 @@ func NewFactory(cfg *config.Config) *Factory {
 	return &Factory{cfg: cfg}
 }
 
-func (f *Factory) CreateVaultStorage() (ports.VaultStorage, error) {
+func (f *Factory) resolveStorageType() string {
 	switch f.cfg.StorageType {
+	case "local":
+		return "local"
+	case "github":
+		return "github"
+	case "auto":
+		if f.cfg.LocalVaultPath != "" || f.cfg.Repo == "" {
+			return "local"
+		}
+		return "github"
+	default:
+		return "github"
+	}
+}
+
+func (f *Factory) CreateVaultStorage() (ports.VaultStorage, error) {
+	switch f.resolveStorageType() {
 	case "github":
 		client, err := github.GetAuthenticatedClient()
 		if err != nil {
@@ -32,7 +48,7 @@ func (f *Factory) CreateVaultStorage() (ports.VaultStorage, error) {
 }
 
 func (f *Factory) CreateUserStorage() (ports.UserStorage, error) {
-	switch f.cfg.StorageType {
+	switch f.resolveStorageType() {
 	case "github":
 		client, err := github.GetAuthenticatedClient()
 		if err != nil {
@@ -47,7 +63,7 @@ func (f *Factory) CreateUserStorage() (ports.UserStorage, error) {
 }
 
 func (f *Factory) CreateSSHStorage() (ports.SSHStorage, error) {
-	switch f.cfg.StorageType {
+	switch f.resolveStorageType() {
 	case "github":
 		client, err := github.GetAuthenticatedClient()
 		if err != nil {
@@ -62,7 +78,7 @@ func (f *Factory) CreateSSHStorage() (ports.SSHStorage, error) {
 }
 
 func (f *Factory) CreateEnvStorage() (ports.EnvStorage, error) {
-	switch f.cfg.StorageType {
+	switch f.resolveStorageType() {
 	case "github":
 		client, err := github.GetAuthenticatedClient()
 		if err != nil {
@@ -77,7 +93,7 @@ func (f *Factory) CreateEnvStorage() (ports.EnvStorage, error) {
 }
 
 func (f *Factory) CreateResourceStorage() (ports.ResourceStorage, error) {
-	switch f.cfg.StorageType {
+	switch f.resolveStorageType() {
 	case "github":
 		client, err := github.GetAuthenticatedClient()
 		if err != nil {
@@ -92,7 +108,7 @@ func (f *Factory) CreateResourceStorage() (ports.ResourceStorage, error) {
 }
 
 func (f *Factory) CreateStorage() (Storage, error) {
-	switch f.cfg.StorageType {
+	switch f.resolveStorageType() {
 	case "github":
 		token, err := github.GetGitHubToken()
 		if err != nil {
