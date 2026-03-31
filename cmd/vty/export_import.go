@@ -15,6 +15,8 @@ import (
 	"github.com/DeadBryam/vaulty/internal/compress"
 	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/crypto"
+	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -22,6 +24,7 @@ type BackupEntry struct {
 	Type    string `json:"type"`
 	Name    string `json:"name"`
 	Env     string `json:"env,omitempty"`
+	Path    string `json:"path"`
 	Content []byte `json:"content"`
 }
 
@@ -55,6 +58,18 @@ func runExport(cmd *cobra.Command, args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
+
+	owner, repo, err := github.ParseRepo(cfg.Repo)
+	if err != nil {
+		return fmt.Errorf("invalid repo in config: %w", err)
+	}
+
+	token, err := github.GetGitHubToken()
+	if err != nil {
+		return fmt.Errorf("GitHub authentication: %w", err)
+	}
+
+	client := github.NewClient(token)
 
 	logger.Info("Starting vault export...")
 
@@ -115,22 +130,45 @@ func runExport(cmd *cobra.Command, args []string) error {
 			entries = append(entries, BackupEntry{
 				Type:    "metadata",
 				Name:    name,
+				Path:    name,
 				Content: content,
 			})
 		}
 	}
 
-	resources, err := s.ListResources(ctx)
+	resourceInfos, err := listResources(ctx, client, owner, repo, "resources")
 	if err == nil {
-		for _, name := range resources {
-			data, err := s.GetResource(ctx, name)
+		logger.Info("Exporting resources", "count", len(resourceInfos))
+		for _, r := range resourceInfos {
+			path := fmt.Sprintf("resources/%s.vty", r.Name)
+			data, err := s.GetResource(ctx, path)
 			if err != nil {
-				logger.Warn("failed to get resource", "name", name)
+				logger.Warn("failed to get resource", "name", r.Name)
 				continue
 			}
 			entries = append(entries, BackupEntry{
 				Type:    "resource",
-				Name:    name,
+				Name:    r.Name,
+				Path:    path,
+				Content: data,
+			})
+		}
+	}
+
+	configInfos, err := listResources(ctx, client, owner, repo, "config")
+	if err == nil {
+		logger.Info("Exporting configs", "count", len(configInfos))
+		for _, c := range configInfos {
+			path := fmt.Sprintf("config/%s.vty", c.Name)
+			data, err := s.GetResource(ctx, path)
+			if err != nil {
+				logger.Warn("failed to get config", "name", c.Name)
+				continue
+			}
+			entries = append(entries, BackupEntry{
+				Type:    "config",
+				Name:    c.Name,
+				Path:    path,
 				Content: data,
 			})
 		}
@@ -261,6 +299,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 
 		entry := BackupEntry{
 			Type:    parts[0],
+			Path:    f.Name,
 			Content: content,
 		}
 
@@ -274,11 +313,60 @@ func runImport(cmd *cobra.Command, args []string) error {
 		entries = append(entries, entry)
 	}
 
-	fmt.Printf("Importing backup from: %s\n", importInput)
-	fmt.Printf("  Exported: %s\n", manifest.Exported.Format(time.RFC3339))
-	fmt.Printf("  Entries:  %d\n\n", manifest.EntryCount)
+	fmt.Printf("Backup file: %s\n", importInput)
+	fmt.Printf("  Exported:  %s\n", manifest.Exported.Format(time.RFC3339))
+	fmt.Printf("  Entries:   %d\n", manifest.EntryCount)
+	fmt.Println()
+	fmt.Println(ui.WarningStyle.Render("⚠️  This will WIPE your current vault and replace it with this backup."))
+	fmt.Println()
+
+	fmt.Print("Type 'yes' to confirm: ")
+	var confirm string
+	fmt.Scanln(&confirm)
+	if confirm != "yes" {
+		fmt.Println("Import cancelled.")
+		return nil
+	}
 
 	ctx := context.Background()
+
+	fmt.Println("\nWiping current vault...")
+
+	owner, repo, _ := github.ParseRepo(cfg.Repo)
+	token, _ := github.GetGitHubToken()
+	client := github.NewClient(token)
+
+	wipeEnvs := []string{""}
+	wipeEnvs = append(wipeEnvs, cfg.Environments...)
+	for _, env := range wipeEnvs {
+		var path string
+		if env == "" {
+			path = "envs"
+		} else {
+			path = fmt.Sprintf("envs/%s", env)
+		}
+		items, _ := client.ListDirectory(ctx, owner, repo, path)
+		for _, item := range items {
+			if strings.HasSuffix(item.Name, ".vty") {
+				client.DeleteContent(ctx, owner, repo, fmt.Sprintf("%s/%s", path, item.Name), item.Sha)
+			}
+		}
+	}
+
+	wipeDirs := []string{"resources", "config"}
+	for _, dir := range wipeDirs {
+		items, _ := client.ListDirectory(ctx, owner, repo, dir)
+		for _, item := range items {
+			if strings.HasSuffix(item.Name, ".vty") {
+				client.DeleteContent(ctx, owner, repo, fmt.Sprintf("%s/%s", dir, item.Name), item.Sha)
+			}
+		}
+	}
+
+	fmt.Println("Vault wiped successfully.")
+
+	fmt.Println("Importing backup...")
+
 	imported := 0
 	skipped := 0
 
@@ -294,18 +382,27 @@ func runImport(cmd *cobra.Command, args []string) error {
 			imported++
 
 		case "metadata":
-			err := s.PutContent(ctx, entry.Name, string(entry.Content))
+			err := s.PutContent(ctx, entry.Path, string(entry.Content))
 			if err != nil {
-				logger.Warn("failed to import metadata", "name", entry.Name)
+				logger.Warn("failed to import metadata", "path", entry.Path)
 				skipped++
 				continue
 			}
 			imported++
 
 		case "resource":
-			err := s.PutResource(ctx, entry.Name, entry.Content)
+			err := s.PutResource(ctx, entry.Path, entry.Content)
 			if err != nil {
-				logger.Warn("failed to import resource", "name", entry.Name)
+				logger.Warn("failed to import resource", "path", entry.Path)
+				skipped++
+				continue
+			}
+			imported++
+
+		case "config":
+			err := s.PutResource(ctx, entry.Path, entry.Content)
+			if err != nil {
+				logger.Warn("failed to import config", "path", entry.Path)
 				skipped++
 				continue
 			}
@@ -313,7 +410,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("✓ Import complete!\n\n")
+	fmt.Printf("\n✓ Import complete!\n\n")
 	fmt.Printf("  Imported: %d\n", imported)
 	fmt.Printf("  Skipped:  %d\n", skipped)
 
