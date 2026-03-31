@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 )
 
@@ -34,10 +32,6 @@ Examples:
   vty run env api --env staging -- sh -c 'npm run migrate && npm run start'`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: runRunEnv,
-}
-
-func runRunEnv(cmd *cobra.Command, args []string) error {
-	return fmt.Errorf("not yet implemented")
 }
 
 func init() {
