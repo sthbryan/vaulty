@@ -111,26 +111,35 @@ func deleteCloudVault(cfg *config.Config, ctx context.Context) error {
 		return fmt.Errorf("invalid repo format: %w", err)
 	}
 
-	pathsToDelete := []string{".vaulty", "envs", "ssh"}
+	dirsToClean := []string{"envs", "ssh", "resource", "config", ".vaulty"}
 
 	ui.PrintInfo("Deleting vault contents from GitHub...")
-	deletedCount := 0
 
-	for _, path := range pathsToDelete {
-
-		content, err := client.GetContent(ctx, owner, repoName, path)
-		if err != nil || content == nil {
-			ui.PrintInfo("  Skipping %s (not found)", path)
-			continue
-		}
-
-		err = client.DeleteContent(ctx, owner, repoName, path, content.Sha)
+	for _, dir := range dirsToClean {
+		items, err := client.ListDirectory(ctx, owner, repoName, dir)
 		if err != nil {
-			logger.Warn("failed to delete", "path", path, "error", err)
+			ui.PrintInfo("  Skipping %s (not found)", dir)
 			continue
 		}
-		deletedCount++
-		ui.PrintInfo("  Deleted: %s", path)
+
+		for _, item := range items {
+			filePath := fmt.Sprintf("%s/%s", dir, item.Name)
+			if item.Type == "dir" {
+				subItems, _ := client.ListDirectory(ctx, owner, repoName, filePath)
+				for _, sub := range subItems {
+					subPath := fmt.Sprintf("%s/%s/%s", dir, item.Name, sub.Name)
+					err := client.DeleteContent(ctx, owner, repoName, subPath, sub.Sha)
+					if err == nil {
+						ui.PrintInfo("  Deleted: %s", subPath)
+					}
+				}
+			} else {
+				err := client.DeleteContent(ctx, owner, repoName, filePath, item.Sha)
+				if err == nil {
+					ui.PrintInfo("  Deleted: %s", filePath)
+				}
+			}
+		}
 	}
 
 	cfg.SetRepo("")
@@ -145,7 +154,6 @@ func deleteCloudVault(cfg *config.Config, ctx context.Context) error {
 
 	fmt.Println()
 	ui.PrintSuccess("Vault deleted successfully!")
-	ui.PrintInfo("Deleted %d/%d items", deletedCount, len(pathsToDelete))
 	ui.PrintWarning("You can now reinitialize with 'vty init'")
 	fmt.Println()
 
