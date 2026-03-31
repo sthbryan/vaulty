@@ -46,6 +46,7 @@ type UserEntry struct {
 	Role              string             `json:"role"`
 	CreatedAt         time.Time          `json:"created_at"`
 	PasswordChallenge *PasswordChallenge `json:"password_challenge,omitempty"`
+	EncryptedPassword string             `json:"encrypted_password,omitempty"`
 }
 
 type Metadata struct {
