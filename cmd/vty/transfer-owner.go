@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/crypto"
-	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
@@ -25,6 +26,37 @@ Examples:
   vty transfer-owner juan`,
 	Args: cobra.ExactArgs(1),
 	RunE: runTransferOwner,
+}
+
+func findMetadataUser(metadata *config.Metadata, username string) (*config.UserEntry, error) {
+	for i := range metadata.Users {
+		if metadata.Users[i].Username == username {
+			return &metadata.Users[i], nil
+		}
+	}
+	return nil, fmt.Errorf("user %q not found", username)
+}
+
+func prepareTransferMetadata(metadata *config.Metadata, currentOwner, newOwner string) (*config.Metadata, error) {
+	if metadata.Owner != currentOwner {
+		return nil, fmt.Errorf("current config owner mismatch: metadata owner is %q", metadata.Owner)
+	}
+
+	if _, err := findMetadataUser(metadata, newOwner); err != nil {
+		return nil, fmt.Errorf("new owner not found: %s", newOwner)
+	}
+
+	metadata.Owner = newOwner
+	for i := range metadata.Users {
+		if metadata.Users[i].Username == currentOwner {
+			metadata.Users[i].Role = "editor"
+		}
+		if metadata.Users[i].Username == newOwner {
+			metadata.Users[i].Role = "owner"
+		}
+	}
+
+	return metadata, nil
 }
 
 func runTransferOwner(cmd *cobra.Command, args []string) error {
@@ -47,8 +79,31 @@ func runTransferOwner(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("only the owner can transfer ownership")
 	}
 
-	userEntry, err := cfg.FindUser(newOwner)
+	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
+	defer cancel()
+
+	factory := storage.NewFactory(cfg)
+	s, err := factory.CreateStorage()
 	if err != nil {
+		return fmt.Errorf("creating storage: %w", err)
+	}
+
+	metadataBytes, err := s.GetMetadata(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get metadata: %w", err)
+	}
+
+	var metadata config.Metadata
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		return fmt.Errorf("failed to parse metadata: %w", err)
+	}
+
+	ownerEntry, err := findMetadataUser(&metadata, cfg.CurrentUser)
+	if err != nil {
+		return fmt.Errorf("current user not found in metadata: %w", err)
+	}
+
+	if _, err := findMetadataUser(&metadata, newOwner); err != nil {
 		return fmt.Errorf("new owner not found: %s", newOwner)
 	}
 
@@ -56,19 +111,6 @@ func runTransferOwner(cmd *cobra.Command, args []string) error {
 	ui.PrintInfo("Transfer ownership to %s?", newOwner)
 	ui.PrintInfo("You will become an editor.")
 	fmt.Println()
-
-	token, err := github.GetGitHubToken()
-	if err != nil {
-		return fmt.Errorf("failed to get GitHub token: %w", err)
-	}
-
-	client := github.NewClient(token)
-	ctx := context.Background()
-
-	owner, repoName, err := github.ParseRepo(cfg.Repo)
-	if err != nil {
-		return fmt.Errorf("invalid repo format: %w", err)
-	}
 
 	confirmed, err := ui.AskConfirm(fmt.Sprintf("Transfer ownership to %s?", newOwner), false)
 	if err != nil {
@@ -98,53 +140,36 @@ func runTransferOwner(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("form cancelled")
 	}
 
-	if userEntry.PasswordChallenge == nil {
-		return fmt.Errorf("user %s does not have a password challenge set up", newOwner)
+	if ownerEntry.PasswordChallenge == nil {
+		return fmt.Errorf("current owner does not have a password challenge set up")
 	}
 
 	isValid := crypto.ValidatePasswordWithChallenge(
 		password,
-		userEntry.PasswordChallenge.Salt,
-		userEntry.PasswordChallenge.Challenge,
+		ownerEntry.PasswordChallenge.Salt,
+		ownerEntry.PasswordChallenge.Challenge,
 	)
 	if !isValid {
 		return fmt.Errorf("invalid password")
 	}
 
-	ui.PrintInfo("Downloading metadata...")
-	metadataBytes, err := client.GetMetadata(ctx, owner, repoName)
+	updatedMetadata, err := prepareTransferMetadata(&metadata, cfg.CurrentUser, newOwner)
 	if err != nil {
-		return fmt.Errorf("failed to get metadata: %w", err)
-	}
-
-	var metadata config.Metadata
-	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
-		return fmt.Errorf("failed to parse metadata: %w", err)
-	}
-
-	metadata.Owner = newOwner
-
-	for i := range metadata.Users {
-		if metadata.Users[i].Username == cfg.CurrentUser {
-			metadata.Users[i].Role = "editor"
-		}
-		if metadata.Users[i].Username == newOwner {
-			metadata.Users[i].Role = "owner"
-		}
+		return err
 	}
 
 	ui.PrintInfo("Uploading metadata...")
-	updatedMetadataBytes, err := json.MarshalIndent(metadata, "", "  ")
+	updatedMetadataBytes, err := json.MarshalIndent(updatedMetadata, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	if err := client.PutMetadata(ctx, owner, repoName, updatedMetadataBytes); err != nil {
+	if err := s.PutMetadata(ctx, updatedMetadataBytes); err != nil {
 		return fmt.Errorf("failed to upload metadata: %w", err)
 	}
 
 	cfg.CurrentUserRole = "editor"
-	cfg.Metadata = &metadata
+	cfg.Metadata = updatedMetadata
 
 	if err := cfg.Save(""); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)

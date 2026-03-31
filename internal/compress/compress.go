@@ -3,9 +3,11 @@ package compress
 import (
 	"archive/tar"
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/klauspost/compress/gzip"
 )
@@ -88,6 +90,11 @@ func CompressDirectory(dirPath string) ([]byte, error) {
 }
 
 func DecompressDirectory(data []byte, destPath string) error {
+	destRoot, err := filepath.Abs(destPath)
+	if err != nil {
+		return err
+	}
+
 	gr, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
 		return err
@@ -105,7 +112,23 @@ func DecompressDirectory(data []byte, destPath string) error {
 			return err
 		}
 
-		target := filepath.Join(destPath, header.Name)
+		if filepath.IsAbs(header.Name) {
+			return fmt.Errorf("invalid tar entry %q: absolute paths are not allowed", header.Name)
+		}
+
+		cleanName := filepath.Clean(header.Name)
+		if cleanName == ".." || strings.HasPrefix(cleanName, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("invalid tar entry %q: path traversal is not allowed", header.Name)
+		}
+
+		target := filepath.Join(destRoot, cleanName)
+		rel, err := filepath.Rel(destRoot, target)
+		if err != nil {
+			return err
+		}
+		if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("invalid tar entry %q: extraction target escapes destination", header.Name)
+		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
