@@ -2,12 +2,19 @@ package storage
 
 import (
 	"context"
+
+	"github.com/DeadBryam/vaulty/internal/github"
 )
 
 type SSHKeyInfo struct {
 	Username string
 	KeyName  string
 	Size     int
+}
+
+type ContentInfo struct {
+	Name string
+	Sha  string
 }
 
 type Storage interface {
@@ -22,6 +29,14 @@ type Storage interface {
 
 	GetRecoverySeed(ctx context.Context, username string) ([]byte, error)
 	PutRecoverySeed(ctx context.Context, username string, data []byte) error
+
+	GetOwner() string
+	GetOwnerAndRepo() (string, string, error)
+	PutContent(ctx context.Context, path string, content string) error
+	GetContent(ctx context.Context, path string) (*github.ContentResponse, error)
+	DecodeContent(content *github.ContentResponse) ([]byte, error)
+	DeleteContent(ctx context.Context, path string, sha string) error
+	ListDirectory(ctx context.Context, path string) ([]ContentInfo, error)
 
 	ListSSHKeys(ctx context.Context, username string) ([]SSHKeyInfo, error)
 	PutSSHKey(ctx context.Context, username, keyName string, data []byte) error

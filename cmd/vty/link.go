@@ -198,16 +198,18 @@ func runLinkLocal(cfg *config.Config) error {
 	fmt.Println(ui.MutedStyle.Render("Linking to local vault in ~/.vty/vault/..."))
 	fmt.Println()
 
-	localStorage, err := storage.NewLocalStorage()
+	cfg.SetLocalMode()
+	factory := storage.NewFactory(cfg)
+	vaultStorage, err := factory.CreateVaultStorage()
 	if err != nil {
-		return fmt.Errorf("creating local storage: %w", err)
+		return fmt.Errorf("creating storage: %w", err)
 	}
 
 	ctx := context.Background()
 
-	metadataBytes, err := localStorage.GetMetadata(ctx)
+	metadataBytes, err := vaultStorage.GetMetadata(ctx)
 	if err != nil {
-		return fmt.Errorf("fetching local vault metadata: %w", err)
+		return fmt.Errorf("fetching vault metadata: %w", err)
 	}
 
 	var metadata config.Metadata
