@@ -351,8 +351,33 @@ func (l *LocalStorage) CopyFile(src, dst string) error {
 	return dstFile.Sync()
 }
 
+func (l *LocalStorage) resolveSafeVaultPath(path string) (string, error) {
+	clean := filepath.Clean(filepath.FromSlash(path))
+	if clean == "." || clean == "" {
+		return "", fmt.Errorf("invalid empty path")
+	}
+	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("invalid path: %s", path)
+	}
+
+	fullPath := filepath.Join(l.baseDir, clean)
+	rel, err := filepath.Rel(l.baseDir, fullPath)
+	if err != nil {
+		return "", fmt.Errorf("invalid path: %w", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("path escapes vault directory")
+	}
+
+	return fullPath, nil
+}
+
 func (l *LocalStorage) GetResource(ctx context.Context, path string) ([]byte, error) {
-	fullPath := filepath.Join(l.baseDir, path)
+	fullPath, err := l.resolveSafeVaultPath(path)
+	if err != nil {
+		return nil, err
+	}
+
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -364,7 +389,10 @@ func (l *LocalStorage) GetResource(ctx context.Context, path string) ([]byte, er
 }
 
 func (l *LocalStorage) PutResource(ctx context.Context, path string, data []byte) error {
-	fullPath := filepath.Join(l.baseDir, path)
+	fullPath, err := l.resolveSafeVaultPath(path)
+	if err != nil {
+		return err
+	}
 	dir := filepath.Dir(fullPath)
 
 	if err := l.ensureDir(dir); err != nil {
@@ -375,8 +403,12 @@ func (l *LocalStorage) PutResource(ctx context.Context, path string, data []byte
 }
 
 func (l *LocalStorage) DeleteResource(ctx context.Context, path string) error {
-	fullPath := filepath.Join(l.baseDir, path)
-	err := os.Remove(fullPath)
+	fullPath, err := l.resolveSafeVaultPath(path)
+	if err != nil {
+		return err
+	}
+
+	err = os.Remove(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("resource not found: %s", path)
