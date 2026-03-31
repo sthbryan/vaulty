@@ -2,15 +2,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/crypto"
-	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/password"
+	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/DeadBryam/vaulty/internal/ui"
+	"github.com/DeadBryam/vaulty/pkg/application/usecases/users"
 	"github.com/spf13/cobra"
 )
 
@@ -89,229 +87,29 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("password is incorrect")
 	}
 
-	token, err := github.GetGitHubToken()
-	if err != nil {
-		return fmt.Errorf("failed to get GitHub token: %w", err)
-	}
+	factory := storage.NewFactory(cfg)
+	removeUserUseCase := users.NewRemoveUserUseCase(factory)
 
-	client := github.NewClient(token)
 	ctx := context.Background()
 
-	owner, repoName, err := github.ParseRepo(cfg.Repo)
+	fmt.Println()
+	fmt.Println(ui.MutedStyle.Render("Processing..."))
+
+	output, err := removeUserUseCase.Execute(ctx, users.RemoveUserInput{
+		Username:      username,
+		OwnerPassword: currentPassword,
+	})
 	if err != nil {
-		return fmt.Errorf("invalid repo format: %w", err)
+		fmt.Println()
+		fmt.Println(ui.ErrorStyle.Render("❌ Failed to remove user"))
+		fmt.Println()
+		fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Error: %v", err)))
+		fmt.Println()
+		return fmt.Errorf("removing user: %w", err)
 	}
 
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Downloading metadata..."))
-
-	metadataBytes, err := client.GetMetadata(ctx, owner, repoName)
-	if err != nil {
-		return fmt.Errorf("failed to download metadata: %w", err)
-	}
-
-	var metadata config.Metadata
-	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
-		return fmt.Errorf("parsing metadata: %w", err)
-	}
-
-	var ownerEntry *config.UserEntry
-	for i := range metadata.Users {
-		if metadata.Users[i].Username == cfg.CurrentUser {
-			ownerEntry = &metadata.Users[i]
-			break
-		}
-	}
-
-	if ownerEntry != nil && ownerEntry.PasswordChallenge != nil {
-		if !crypto.ValidatePasswordWithChallenge(verifyPassword, ownerEntry.PasswordChallenge.Salt, ownerEntry.PasswordChallenge.Challenge) {
-			fmt.Println()
-			fmt.Println(ui.ErrorStyle.Render("❌ Incorrect password"))
-			fmt.Println()
-			return fmt.Errorf("password validation failed")
-		}
-	}
-
-	fmt.Println()
-	ui.PrintInfo("Downloading old master key...")
-
-	oldKeyResp, err := client.GetUserKeys(ctx, owner, repoName, cfg.Metadata.Owner)
-	if err != nil {
-		return fmt.Errorf("failed to get old master key: %w", err)
-	}
-
-	oldKeyData, err := client.DecodeContent(oldKeyResp)
-	if err != nil {
-		return fmt.Errorf("failed to decode old master key: %w", err)
-	}
-
-	oldEncryptedData := &crypto.EncryptedData{}
-	if err := json.Unmarshal(oldKeyData, oldEncryptedData); err != nil {
-		return fmt.Errorf("failed to parse old master key: %w", err)
-	}
-
-	oldMasterKey, err := crypto.DecryptMasterKeyWithPassword(oldEncryptedData, currentPassword)
-	if err != nil {
-		return fmt.Errorf("failed to decrypt old master key: %w", err)
-	}
-
-	ui.PrintInfo("Downloading vault...")
-
-	vaultResp, err := client.GetVault(ctx, owner, repoName)
-	if err != nil {
-		return fmt.Errorf("failed to get vault: %w", err)
-	}
-
-	vaultData, err := client.DecodeContent(vaultResp)
-	if err != nil {
-		return fmt.Errorf("failed to decode vault: %w", err)
-	}
-
-	vaultJSON, err := crypto.DecompressHex(string(vaultData))
-	if err != nil {
-		return fmt.Errorf("decompressing vault: %w", err)
-	}
-
-	vaultEncryptedData := &crypto.EncryptedData{}
-	if err := json.Unmarshal(vaultJSON, vaultEncryptedData); err != nil {
-		return fmt.Errorf("failed to parse vault: %w", err)
-	}
-
-	ui.PrintInfo("Decrypting vault...")
-
-	plaintextSecrets, err := crypto.DecryptVaultData(vaultEncryptedData, oldMasterKey)
-	if err != nil {
-		return fmt.Errorf("failed to decrypt vault: %w", err)
-	}
-
-	ui.PrintInfo("Generating new master key...")
-
-	newMasterKey, err := crypto.GenerateMasterKey()
-	if err != nil {
-		return fmt.Errorf("failed to generate new master key: %w", err)
-	}
-
-	ui.PrintInfo("Re-encrypting vault with new master key...")
-
-	newVaultEncrypted, err := crypto.EncryptVaultData(plaintextSecrets, newMasterKey)
-	if err != nil {
-		return fmt.Errorf("failed to encrypt vault: %w", err)
-	}
-
-	ui.PrintInfo("Removing user from metadata...")
-
-	oldUserCount := len(metadata.Users)
-
-	var newUsers []config.UserEntry
-	for _, u := range metadata.Users {
-		if u.Username != username {
-			newUsers = append(newUsers, u)
-		}
-	}
-
-	if len(newUsers) == oldUserCount {
-		return fmt.Errorf("user %q not found in metadata", username)
-	}
-
-	metadata.Users = newUsers
-
-	updatedMetadataJSON, err := json.Marshal(metadata)
-	if err != nil {
-		return fmt.Errorf("failed to marshal metadata: %w", err)
-	}
-
-	ui.PrintInfo("Re-encrypting new master key for owner...")
-
-	encryptedNewKey, err := crypto.EncryptMasterKeyWithPassword(newMasterKey, currentPassword)
-	if err != nil {
-		return fmt.Errorf("failed to encrypt master key for owner: %w", err)
-	}
-
-	ownerKeyJSON, err := json.Marshal(encryptedNewKey)
-	if err != nil {
-		return fmt.Errorf("failed to marshal encrypted key: %w", err)
-	}
-
-	ownerKeyHex, err := crypto.CompressHex(ownerKeyJSON)
-	if err != nil {
-		return fmt.Errorf("failed to compress owner key: %w", err)
-	}
-
-	fmt.Println()
-	ui.PrintInfo("Uploading changes to GitHub...")
-
-	newVaultJSON, err := json.Marshal(newVaultEncrypted)
-	if err != nil {
-		return fmt.Errorf("failed to marshal vault: %w", err)
-	}
-
-	newVaultHex, err := crypto.CompressHex(newVaultJSON)
-	if err != nil {
-		return fmt.Errorf("failed to compress vault: %w", err)
-	}
-
-	err = client.PutVault(ctx, owner, repoName, []byte(newVaultHex))
-	if err != nil {
-		return fmt.Errorf("failed to upload vault: %w", err)
-	}
-
-	err = client.PutMetadata(ctx, owner, repoName, updatedMetadataJSON)
-	if err != nil {
-		return fmt.Errorf("failed to upload metadata: %w", err)
-	}
-
-	err = client.PutUserKeys(ctx, owner, repoName, cfg.CurrentUser, []byte(ownerKeyHex))
-	if err != nil {
-		return fmt.Errorf("failed to upload owner key: %w", err)
-	}
-
-	ui.PrintInfo("Deleting removed user's key file...")
-
-	removedUserKeyPath := fmt.Sprintf(".vaulty/keys/%s.vty", username)
-	removedUserKeyResp, err := client.GetContent(ctx, owner, repoName, removedUserKeyPath)
-	if err == nil && removedUserKeyResp != nil {
-		err = client.DeleteContent(ctx, owner, repoName, removedUserKeyPath, removedUserKeyResp.Sha)
-		if err != nil {
-			return fmt.Errorf("failed to delete removed user's key file: %w", err)
-		}
-	}
-
-	ui.PrintInfo("Deleting removed user's recovery file...")
-	recoveryPath := fmt.Sprintf(".vaulty/recovery/%s.recovery.vty", username)
-	recoveryResp, err := client.GetContent(ctx, owner, repoName, recoveryPath)
-	if err == nil && recoveryResp != nil {
-		err = client.DeleteContent(ctx, owner, repoName, recoveryPath, recoveryResp.Sha)
-		if err != nil {
-			logger.Warn("failed to delete recovery file", "path", recoveryPath, "error", err)
-		}
-	}
-
-	ui.PrintInfo("Deleting removed user's SSH keys...")
-	sshDirPath := fmt.Sprintf("ssh/%s", username)
-	sshItems, err := client.ListDirectory(ctx, owner, repoName, sshDirPath)
-	if err == nil {
-		for _, item := range sshItems {
-			if !strings.HasSuffix(item.Name, ".vty") {
-				continue
-			}
-			itemPath := fmt.Sprintf("%s/%s", sshDirPath, item.Name)
-			itemResp, err := client.GetContent(ctx, owner, repoName, itemPath)
-			if err == nil && itemResp != nil {
-				err = client.DeleteContent(ctx, owner, repoName, itemPath, itemResp.Sha)
-				if err != nil {
-					logger.Warn("failed to delete SSH key", "path", itemPath, "error", err)
-				}
-			}
-		}
-		gitkeepPath := fmt.Sprintf("%s/.gitkeep", sshDirPath)
-		gitkeepResp, err := client.GetContent(ctx, owner, repoName, gitkeepPath)
-		if err == nil && gitkeepResp != nil {
-			client.DeleteContent(ctx, owner, repoName, gitkeepPath, gitkeepResp.Sha)
-		}
-	}
-
-	fmt.Println()
-	ui.PrintSuccess("%s removed, masterKey rotated, all users re-encrypted", username)
+	ui.PrintSuccess("%s removed, masterKey rotated, all users re-encrypted", output.RemovedUser)
 	fmt.Println()
 
 	return nil

@@ -2,15 +2,14 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/crypto"
-	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/DeadBryam/vaulty/internal/ui"
+	"github.com/DeadBryam/vaulty/pkg/application/usecases/users"
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 )
@@ -60,20 +59,6 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("only vault owner can add users")
 	}
 
-	owner, repo, err := github.ParseRepo(cfg.Repo)
-	if err != nil {
-		return fmt.Errorf("parsing repo: %w", err)
-	}
-
-	token, err := github.GetGitHubToken()
-	if err != nil {
-		return fmt.Errorf("GitHub authentication: %w", err)
-	}
-
-	client := github.NewClient(token)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	fmt.Println()
 	fmt.Println(ui.InfoStyle.Render("🔐 Verifying vault ownership"))
 	fmt.Println()
@@ -96,196 +81,26 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Downloading metadata..."))
+	fmt.Println(ui.MutedStyle.Render("Processing..."))
 
-	metadataBytes, err := client.GetMetadata(ctx, owner, repo)
-	if err != nil {
-		return fmt.Errorf("failed to download metadata: %w", err)
-	}
+	factory := storage.NewFactory(cfg)
+	addUserUseCase := users.NewAddUserUseCase(factory)
 
-	var metadata config.Metadata
-	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
-		return fmt.Errorf("parsing metadata: %w", err)
-	}
+	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
+	defer cancel()
 
-	var ownerEntry *config.UserEntry
-	for i := range metadata.Users {
-		if metadata.Users[i].Username == cfg.CurrentUser {
-			ownerEntry = &metadata.Users[i]
-			break
-		}
-	}
-
-	if ownerEntry == nil {
-		return fmt.Errorf("owner entry not found in metadata")
-	}
-
-	if ownerEntry.PasswordChallenge != nil {
-		if !crypto.ValidatePasswordWithChallenge(ownerPassword, ownerEntry.PasswordChallenge.Salt, ownerEntry.PasswordChallenge.Challenge) {
-			fmt.Println()
-			fmt.Println(ui.ErrorStyle.Render("❌ Incorrect password"))
-			fmt.Println()
-			return fmt.Errorf("password validation failed")
-		}
-	}
-
-	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Downloading .vaulty/keys/%s.vty...", cfg.CurrentUser)))
-
-	keyPath := fmt.Sprintf(".vaulty/keys/%s.vty", cfg.CurrentUser)
-	keyResp, err := client.GetContent(ctx, owner, repo, keyPath)
-	if err != nil {
-		return fmt.Errorf("failed to download owner key: %w", err)
-	}
-
-	keyData, err := client.DecodeContent(keyResp)
-	if err != nil {
-		return fmt.Errorf("decoding owner key: %w", err)
-	}
-
-	keyJSON, err := crypto.DecompressHex(string(keyData))
-	if err != nil {
-		return fmt.Errorf("decompressing owner key: %w", err)
-	}
-
-	encryptedData := &crypto.EncryptedData{}
-	if err := json.Unmarshal(keyJSON, encryptedData); err != nil {
-		return fmt.Errorf("parsing owner key JSON: %w", err)
-	}
-
-	masterKey, err := crypto.DecryptMasterKeyWithPassword(encryptedData, ownerPassword)
-	if err != nil {
-		fmt.Println()
-		fmt.Println(ui.ErrorStyle.Render("❌ Failed to decrypt vault"))
-		fmt.Println()
-		fmt.Println(ui.MutedStyle.Render("Invalid password or corrupted vault data."))
-		fmt.Println()
-		return fmt.Errorf("decryption failed")
-	}
-
-	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Checking if user exists..."))
-
-	for _, user := range metadata.Users {
-		if user.Username == username {
-			return fmt.Errorf("user %q already exists", username)
-		}
-	}
-
-	fmt.Println()
-	fmt.Println(ui.InfoStyle.Render("🔑 Create new user password"))
-	fmt.Println()
-
-	var newPassword1, newPassword2 string
-
-	err = huh.NewInput().
-		Title("New password").
-		Placeholder("Enter a strong password").
-		EchoMode(huh.EchoModePassword).
-		Value(&newPassword1).
-		Validate(func(s string) error {
-			if len(s) < 8 {
-				return fmt.Errorf("password must be at least 8 characters")
-			}
-			return nil
-		}).
-		Run()
-	if err != nil {
-		return fmt.Errorf("form cancelled")
-	}
-
-	err = huh.NewInput().
-		Title("Confirm password").
-		Placeholder("Re-enter password").
-		EchoMode(huh.EchoModePassword).
-		Value(&newPassword2).
-		Validate(func(s string) error {
-			if s != newPassword1 {
-				return fmt.Errorf("passwords do not match")
-			}
-			return nil
-		}).
-		Run()
-	if err != nil {
-		return fmt.Errorf("form cancelled")
-	}
-
-	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Encrypting master key..."))
-
-	encryptedMasterKey, err := crypto.EncryptMasterKeyWithPassword(masterKey, newPassword1)
-	if err != nil {
-		return fmt.Errorf("encrypting master key: %w", err)
-	}
-
-	salt, challenge, err := crypto.GeneratePasswordChallengeStruct(newPassword1)
-	if err != nil {
-		return fmt.Errorf("generating password challenge: %w", err)
-	}
-
-	newUserChallenge := &config.PasswordChallenge{
-		Salt:      salt,
-		Challenge: challenge,
-	}
-
-	masterKeyJSON, err := json.Marshal(encryptedMasterKey)
-	if err != nil {
-		return fmt.Errorf("marshaling master key: %w", err)
-	}
-
-	masterKeyHex, err := crypto.CompressHex(masterKeyJSON)
-	if err != nil {
-		return fmt.Errorf("compressing master key: %w", err)
-	}
-
-	recoverySeeds, err := crypto.GenerateRecoverySeed()
-	if err != nil {
-		return fmt.Errorf("generating recovery seed: %w", err)
-	}
-
-	metadata.Users = append(metadata.Users, config.UserEntry{
-		Username:          username,
-		Role:              role,
-		CreatedAt:         time.Now(),
-		PasswordChallenge: newUserChallenge,
+	output, err := addUserUseCase.Execute(ctx, users.AddUserInput{
+		Username:      username,
+		Role:          role,
+		OwnerPassword: ownerPassword,
 	})
-
-	metadataJSON, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshaling metadata: %w", err)
-	}
-
-	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Uploading files to GitHub..."))
-
-	err = client.PutUserKeys(ctx, owner, repo, username, []byte(masterKeyHex))
-	if err != nil {
-		return fmt.Errorf("uploading key: %w", err)
-	}
-
-	encryptedSeed, err := crypto.EncryptRecoverySeed(recoverySeeds, newPassword1)
-	if err != nil {
-		return fmt.Errorf("encrypting recovery seed: %w", err)
-	}
-
-	encryptedSeedJSON, err := json.Marshal(encryptedSeed)
-	if err != nil {
-		return fmt.Errorf("marshaling encrypted seed: %w", err)
-	}
-
-	recoveryHex, err := crypto.CompressHex(encryptedSeedJSON)
-	if err != nil {
-		return fmt.Errorf("compressing recovery: %w", err)
-	}
-
-	err = client.PutRecoverySeed(ctx, owner, repo, username, []byte(recoveryHex))
-	if err != nil {
-		return fmt.Errorf("uploading recovery seed: %w", err)
-	}
-
-	err = client.PutMetadata(ctx, owner, repo, metadataJSON)
-	if err != nil {
-		return fmt.Errorf("uploading metadata: %w", err)
+		fmt.Println()
+		fmt.Println(ui.ErrorStyle.Render("❌ Failed to add user"))
+		fmt.Println()
+		fmt.Println(ui.MutedStyle.Render(fmt.Sprintf("Error: %v", err)))
+		fmt.Println()
+		return fmt.Errorf("adding user: %w", err)
 	}
 
 	fmt.Println()
@@ -293,7 +108,7 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println(ui.WarningStyle.Render("⚠️  Recovery seed for new user:"))
 	fmt.Println()
-	fmt.Println(ui.TitleStyle.Render(recoverySeeds))
+	fmt.Println(ui.TitleStyle.Render(output.RecoverySeed))
 	fmt.Println()
 
 	saveToFile, err := ui.AskConfirm("Save recovery seed to a file?", true)
@@ -318,7 +133,7 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 			filePath = defaultPath
 		}
 
-		if err := os.WriteFile(filePath, []byte(recoverySeeds), 0600); err != nil {
+		if err := os.WriteFile(filePath, []byte(output.RecoverySeed), 0600); err != nil {
 			return fmt.Errorf("saving seed file: %w", err)
 		}
 
