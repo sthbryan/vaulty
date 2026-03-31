@@ -4,8 +4,15 @@ import (
 	"os"
 )
 
+const allowFilePasswordFallbackEnv = "VAULTY_ALLOW_FILE_PASSWORD_FALLBACK"
+
+var (
+	newKeyringStorage = func() Storage { return NewKeyringStorage() }
+	newFileStorage    = func() (Storage, error) { return NewFileStorage() }
+)
+
 func NewStorage() (Storage, error) {
-	keyringStorage := NewKeyringStorage()
+	keyringStorage := newKeyringStorage()
 
 	_, err := keyringStorage.Get()
 	if err == nil {
@@ -18,20 +25,22 @@ func NewStorage() (Storage, error) {
 
 	testErr := keyringStorage.Set("__test__")
 	if testErr == nil {
-		keyringStorage.Delete()
+		_ = keyringStorage.Delete()
 		return keyringStorage, nil
 	}
 
-	fileStorage, err := NewFileStorage()
-	if err == nil {
-		_, err = fileStorage.Get()
+	if os.Getenv(allowFilePasswordFallbackEnv) == "1" {
+		fileStorage, err := newFileStorage()
 		if err == nil {
-			return fileStorage, nil
-		}
-		testErr := fileStorage.Set("__test__")
-		if testErr == nil {
-			fileStorage.Delete()
-			return fileStorage, nil
+			_, err = fileStorage.Get()
+			if err == nil {
+				return fileStorage, nil
+			}
+			testErr := fileStorage.Set("__test__")
+			if testErr == nil {
+				_ = fileStorage.Delete()
+				return fileStorage, nil
+			}
 		}
 	}
 
