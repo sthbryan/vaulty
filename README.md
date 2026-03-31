@@ -195,7 +195,7 @@ Vaulty stores config at `~/.vty/config.json`. Key settings:
 
 ### Low Priority
 - [x] **Reset/Clean** — **DESTRUCTIVE** Vault reset (requires seed phrase confirmation)
-- [ ] **CI/CD Integration** — Inject secrets into pipelines without .env files
+- [x] **CI/CD Integration** — Inject secrets into pipelines without .env files
 - [ ] **Audit Logging** — Compliance tracking
 - [ ] **External Integration** — AWS Secrets Manager, Azure Key Vault
 
