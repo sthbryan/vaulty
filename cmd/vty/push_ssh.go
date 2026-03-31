@@ -34,7 +34,7 @@ func runPushSSH(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	vaultFile, originalSize, err := encryptAndPrepareFileWithSession(path, name, models.SecretTypeSSH, sess)
+	vaultFile, originalSize, err := encryptAndPrepareFileWithSession(path, name, models.SecretTypeSSH)
 	if err != nil {
 		return err
 	}
@@ -45,7 +45,7 @@ func runPushSSH(cmd *cobra.Command, args []string) error {
 		ui.PrintCloud("Ensuring SSH directory exists for user: %s", sess.Username)
 	}
 
-	encryptedSize, err := encryptAndUploadWithStorage(s, cfg, remotePath, vaultFile, sess.MasterKey, name)
+	encryptedSize, err := encryptAndUploadWithStorage(s, remotePath, vaultFile, sess.MasterKey)
 	if err != nil {
 		return err
 	}

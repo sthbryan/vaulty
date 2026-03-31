@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/DeadBryam/vaulty/internal/cli"
 	"github.com/DeadBryam/vaulty/internal/compress"
 	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/crypto"
@@ -88,22 +88,14 @@ func pullSecretWithRemotePath(name, remotePath string, sess *session.Session) er
 		return nil
 	}
 
-	if !filepath.IsAbs(outputFile) {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("getting working directory: %w", err)
-		}
-		outputFile = filepath.Join(cwd, outputFile)
+	outputFile, err = cli.ResolveOutputPath(outputFile, outputFile)
+	if err != nil {
+		return err
 	}
 
 	if _, err := os.Stat(outputFile); err == nil {
 		if pullInteractive {
-			confirmed, err := ui.AskConfirm(fmt.Sprintf("File %s already exists. Overwrite?", outputFile), false)
-			if err != nil {
-				return fmt.Errorf("prompt cancelled")
-			}
-			if !confirmed {
-				logger.Info("Aborted")
+			if err := ui.ConfirmOrAbort(fmt.Sprintf("File %s already exists. Overwrite?", outputFile)); err != nil {
 				return nil
 			}
 		} else {
@@ -191,22 +183,14 @@ func pullSecretWithSession(name, secretType, targetUser string, sess *session.Se
 		return nil
 	}
 
-	if !filepath.IsAbs(outputFile) {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("getting working directory: %w", err)
-		}
-		outputFile = filepath.Join(cwd, outputFile)
+	outputFile, err = cli.ResolveOutputPath(outputFile, outputFile)
+	if err != nil {
+		return err
 	}
 
 	if _, err := os.Stat(outputFile); err == nil {
 		if pullInteractive {
-			confirmed, err := ui.AskConfirm(fmt.Sprintf("File %s already exists. Overwrite?", outputFile), false)
-			if err != nil {
-				return fmt.Errorf("prompt cancelled")
-			}
-			if !confirmed {
-				logger.Info("Aborted")
+			if err := ui.ConfirmOrAbort(fmt.Sprintf("File %s already exists. Overwrite?", outputFile)); err != nil {
 				return nil
 			}
 		} else {

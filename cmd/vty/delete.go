@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/github"
 	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/spf13/cobra"
 )
@@ -105,16 +104,7 @@ func getStorageForDelete() (storage.Storage, *config.Config, error) {
 		return nil, nil, err
 	}
 
-	if cfg.IsLocalMode() {
-		s, err := storage.NewLocalStorage()
-		return s, cfg, err
-	}
-
-	token, err := github.GetGitHubToken()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	s, err := storage.NewGitHubStorage(token, cfg.Repo)
+	factory := storage.NewFactory(cfg)
+	s, err := factory.CreateStorage()
 	return s, cfg, err
 }

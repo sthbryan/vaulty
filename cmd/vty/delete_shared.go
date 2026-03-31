@@ -60,13 +60,13 @@ func runDeleteVault(cmd *cobra.Command, args []string) error {
 
 	if cfg.IsLocalMode() {
 
-		return deleteLocalVault(cfg, ctx)
+		return deleteLocalVault(cfg)
 	}
 
 	return deleteCloudVault(cfg, ctx)
 }
 
-func deleteLocalVault(cfg *config.Config, ctx context.Context) error {
+func deleteLocalVault(cfg *config.Config) error {
 	vaultPath := cfg.LocalVaultPath
 	if vaultPath == "" {
 		vaultPath = cfg.DefaultLocalVaultPath()

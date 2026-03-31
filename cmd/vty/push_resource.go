@@ -73,6 +73,11 @@ func runPushResourceOrConfig(name, path string, secretType models.SecretType, ba
 	if err := validateName(name); err != nil {
 		return err
 	}
+	if pushResourceTag != "" {
+		if err := validateName(pushResourceTag); err != nil {
+			return fmt.Errorf("invalid tag: %w", err)
+		}
+	}
 
 	cfg, s, err := loadConfigAndStorage()
 	if err != nil {
@@ -110,7 +115,7 @@ func runPushResourceOrConfig(name, path string, secretType models.SecretType, ba
 		remotePath = fmt.Sprintf("%s/%s.vty", baseDir, name)
 	}
 
-	encryptedSize, err := encryptAndUploadResource(s, remotePath, vaultFile, sess.MasterKey, name, cfg)
+	encryptedSize, err := encryptAndUploadResource(s, remotePath, vaultFile, sess.MasterKey, cfg)
 	if err != nil {
 		return err
 	}
@@ -189,7 +194,7 @@ func prepareResourceFile(path, name string, secretType models.SecretType, isDire
 	return vaultFile, originalSize, nil
 }
 
-func encryptAndUploadResource(s storage.Storage, remotePath string, vaultFile *ResourceVaultFile, masterKey []byte, name string, cfg *config.Config) (int, error) {
+func encryptAndUploadResource(s storage.Storage, remotePath string, vaultFile *ResourceVaultFile, masterKey []byte, cfg *config.Config) (int, error) {
 	ui.PrintLock("Encrypting...")
 
 	vaultData, err := json.Marshal(vaultFile)
@@ -202,14 +207,14 @@ func encryptAndUploadResource(s storage.Storage, remotePath string, vaultFile *R
 		return 0, fmt.Errorf("failed to encrypt: %w", err)
 	}
 
-	if err := uploadResourceToStorage(s, remotePath, []byte(hexEncrypted), name, cfg); err != nil {
+	if err := uploadResourceToStorage(s, remotePath, []byte(hexEncrypted), cfg); err != nil {
 		return 0, err
 	}
 
 	return len(hexEncrypted), nil
 }
 
-func uploadResourceToStorage(s storage.Storage, remotePath string, vaultData []byte, name string, cfg *config.Config) error {
+func uploadResourceToStorage(s storage.Storage, remotePath string, vaultData []byte, cfg *config.Config) error {
 	ctx := context.Background()
 
 	if cfg.IsLocalMode() {

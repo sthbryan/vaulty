@@ -40,15 +40,16 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	vaultFile, originalSize, err := encryptAndPrepareFileWithSession(path, name, models.SecretTypeEnv, sess)
+	vaultFile, originalSize, err := encryptAndPrepareFileWithSession(path, name, models.SecretTypeEnv)
 	if err != nil {
 		return err
 	}
 
 	var remotePath string
-	if pushEnv == "" {
+	switch pushEnv {
+	case "":
 		remotePath = fmt.Sprintf("envs/%s.vty", name)
-	} else if pushEnv == "all" {
+	case "all":
 
 		confirmed, confirmErr := ui.AskConfirm(fmt.Sprintf("Push %s to all environments?", name), false)
 		if confirmErr != nil {
@@ -63,7 +64,7 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 		for _, env := range envs {
 			envPath := fmt.Sprintf("envs/%s/%s.vty", env, name)
 			ui.PrintInfo("Pushing to environment: %s", env)
-			if _, err := encryptAndUploadWithStorage(s, cfg, envPath, vaultFile, sess.MasterKey, name); err != nil {
+			if _, err := encryptAndUploadWithStorage(s, envPath, vaultFile, sess.MasterKey); err != nil {
 				return fmt.Errorf("failed to push to %s: %w", env, err)
 			}
 		}
@@ -80,11 +81,11 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 			fmt.Printf("  Repo:    %s\n", cfg.Repo)
 		}
 		return nil
-	} else {
+	default:
 		remotePath = fmt.Sprintf("envs/%s/%s.vty", pushEnv, name)
 	}
 
-	encryptedSize, err := encryptAndUploadWithStorage(s, cfg, remotePath, vaultFile, sess.MasterKey, name)
+	encryptedSize, err := encryptAndUploadWithStorage(s, remotePath, vaultFile, sess.MasterKey)
 	if err != nil {
 		return err
 	}

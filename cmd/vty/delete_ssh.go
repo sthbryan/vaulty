@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"strings"
 
+	"github.com/DeadBryam/vaulty/internal/cli"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -12,8 +12,8 @@ import (
 func runDeleteSSH(cmd *cobra.Command, args []string) error {
 	name := args[0]
 
-	if strings.Contains(name, "/") || strings.Contains(name, "\\") {
-		return fmt.Errorf("name cannot contain path separators")
+	if err := cli.ValidateName(name); err != nil {
+		return err
 	}
 
 	s, cfg, err := getStorageForDelete()
@@ -45,12 +45,7 @@ func runDeleteSSH(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	if !deleteForce {
-		confirmed, err := ui.AskConfirm("Are you sure you want to delete this SSH key?", false)
-		if err != nil {
-			return fmt.Errorf("confirmation failed: %w", err)
-		}
-		if !confirmed {
-			ui.PrintInfo("Delete cancelled")
+		if err := ui.ConfirmOrAbort("Are you sure you want to delete this SSH key?"); err != nil {
 			return nil
 		}
 	}
