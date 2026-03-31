@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/DeadBryam/vaulty/internal/cli"
 	"github.com/DeadBryam/vaulty/internal/compress"
 	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/storage"
@@ -52,6 +53,15 @@ func runPullConfig(cmd *cobra.Command, args []string) error {
 }
 
 func runPullResourceOrConfig(name, baseDir string) error {
+	if err := validateName(name); err != nil {
+		return err
+	}
+	if pullResourceTag != "" {
+		if err := validateName(pullResourceTag); err != nil {
+			return fmt.Errorf("invalid tag: %w", err)
+		}
+	}
+
 	cfg, s, err := loadConfigAndStorage()
 	if err != nil {
 		return err
@@ -108,17 +118,9 @@ func runPullResourceOrConfig(name, baseDir string) error {
 		plaintext = vaultFile.Data
 	}
 
-	outputFile := name
-	if pullOutput != "" {
-		outputFile = pullOutput
-	}
-
-	if !filepath.IsAbs(outputFile) {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("getting working directory: %w", err)
-		}
-		outputFile = filepath.Join(cwd, outputFile)
+	outputFile, err := cli.ResolveOutputPath(pullOutput, name)
+	if err != nil {
+		return err
 	}
 
 	if isDirectory {
@@ -157,7 +159,7 @@ func runPullResourceOrConfig(name, baseDir string) error {
 			return fmt.Errorf("creating parent directory: %w", err)
 		}
 
-		if err := os.WriteFile(outputFile, plaintext, 0644); err != nil {
+		if err := os.WriteFile(outputFile, plaintext, 0600); err != nil {
 			return fmt.Errorf("writing file: %w", err)
 		}
 

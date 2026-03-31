@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/session"
 	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/charmbracelet/huh"
@@ -15,6 +14,9 @@ import (
 
 func runPullEnv(cmd *cobra.Command, args []string) error {
 	name := args[0]
+	if err := validateName(name); err != nil {
+		return err
+	}
 
 	cfg, err := config.Load("")
 	if err != nil {
@@ -30,7 +32,7 @@ func runPullEnv(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	remotePath, err := getRemotePathForEnv(name, pullEnv, cfg, sess)
+	remotePath, err := getRemotePathForEnv(name, pullEnv, cfg)
 	if err != nil {
 		return err
 	}
@@ -38,7 +40,7 @@ func runPullEnv(cmd *cobra.Command, args []string) error {
 	return pullSecretWithRemotePath(name, remotePath, sess)
 }
 
-func getRemotePathForEnv(name, envFlag string, cfg *config.Config, sess *session.Session) (string, error) {
+func getRemotePathForEnv(name, envFlag string, cfg *config.Config) (string, error) {
 
 	environments := cfg.Environments
 	if len(environments) == 0 {

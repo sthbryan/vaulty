@@ -44,6 +44,15 @@ func runDeleteConfig(cmd *cobra.Command, args []string) error {
 }
 
 func runDeleteResourceOrConfig(name, baseDir string) error {
+	if err := validateName(name); err != nil {
+		return err
+	}
+	if deleteResourceTag != "" {
+		if err := validateName(deleteResourceTag); err != nil {
+			return fmt.Errorf("invalid tag: %w", err)
+		}
+	}
+
 	s, cfg, err := getStorageForDelete()
 	if err != nil {
 		return err
