@@ -100,11 +100,37 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	resources, err := listResources(ctx, client, owner, repo, "resources")
 	if err == nil {
 		logger.Info("Listed resources", "count", len(resources))
+		for _, r := range resources {
+			secrets = append(secrets, models.SecretInfo{
+				Name: r.Name,
+				Type: r.Type,
+				Size: r.Size,
+			})
+		}
 	}
 
 	configs, err := listResources(ctx, client, owner, repo, "config")
 	if err == nil {
 		logger.Info("Listed configs", "count", len(configs))
+		for _, c := range configs {
+			secrets = append(secrets, models.SecretInfo{
+				Name: c.Name,
+				Type: c.Type,
+				Size: c.Size,
+			})
+		}
+	}
+
+	sshKeys, err = client.ListSSHKeys(ctx, owner, repo, "")
+	if err == nil {
+		logger.Info("Listed SSH keys", "count", len(sshKeys))
+		for _, k := range sshKeys {
+			secrets = append(secrets, models.SecretInfo{
+				Name: k.KeyName,
+				Type: models.SecretTypeSSH,
+				Size: int64(k.Size),
+			})
+		}
 	}
 
 	if len(resources) == 0 && len(configs) == 0 && len(secrets) == 0 {

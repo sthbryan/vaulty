@@ -53,23 +53,31 @@ func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets 
 
 	totalSize := int64(0)
 	envCount := 0
+	resourceCount := 0
+	configCount := 0
 	sshCount := len(sshKeys)
 	for _, s := range secrets {
 		totalSize += s.Size
-		if s.Type == models.SecretTypeEnv {
+		switch s.Type {
+		case models.SecretTypeEnv:
 			envCount++
+		case models.SecretTypeResource:
+			resourceCount++
+		case models.SecretTypeConfig:
+			configCount++
 		}
 	}
 
 	fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== SUMMARY ==="))
 	fmt.Println()
 
-	fmt.Printf("  Total Secrets: %s (", ui.HighlightStyle.Render(fmt.Sprintf("%d", len(secrets))))
-	fmt.Printf("%s env + ", ui.HighlightStyle.Render(fmt.Sprintf("%d", envCount)))
-	fmt.Printf("%s ssh)\n", ui.HighlightStyle.Render(fmt.Sprintf("%d", sshCount)))
-	fmt.Printf("  Total Size:    %s (", ui.HighlightStyle.Render(formatSize(totalSize)))
-	fmt.Printf("%s env + ", ui.HighlightStyle.Render(formatSize(calculateTypeSize(secrets, models.SecretTypeEnv))))
-	fmt.Printf("%s ssh)\n", ui.HighlightStyle.Render(formatSize(calculateTypeSize(secrets, models.SecretTypeSSH))))
+	fmt.Printf("  Total Secrets: %s (%s env + %s resource + %s config + %s ssh)\n",
+		ui.HighlightStyle.Render(fmt.Sprintf("%d", len(secrets))),
+		ui.HighlightStyle.Render(fmt.Sprintf("%d", envCount)),
+		ui.HighlightStyle.Render(fmt.Sprintf("%d", resourceCount)),
+		ui.HighlightStyle.Render(fmt.Sprintf("%d", configCount)),
+		ui.HighlightStyle.Render(fmt.Sprintf("%d", sshCount)))
+	fmt.Printf("  Total Size:    %s\n", ui.HighlightStyle.Render(formatSize(totalSize)))
 	fmt.Println()
 
 	if sess.Role == "owner" {
