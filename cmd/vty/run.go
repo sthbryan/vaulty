@@ -19,21 +19,6 @@ Examples:
   vty run env api -e production -- npm run build`,
 }
 
-var runEnvCmd = &cobra.Command{
-	Use:   "env <name> [--env <environment>] -- <command> [args...]",
-	Short: "Run with environment secrets",
-	Long: `Download and decrypt environment secrets, then execute a command with those secrets injected into the environment.
-
-The '--' separator is required to distinguish Vaulty flags from the child command.
-
-Examples:
-  vty run env api -- npm run build
-  vty run env api -e production -- npm run build
-  vty run env api --env staging -- sh -c 'npm run migrate && npm run start'`,
-	Args: cobra.MinimumNArgs(1),
-	RunE: runRunEnv,
-}
-
 func init() {
 	rootCmd.AddCommand(runCmd)
 	runCmd.AddCommand(runEnvCmd)

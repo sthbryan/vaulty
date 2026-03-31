@@ -16,31 +16,66 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var runEnvCmd = &cobra.Command{
+	Use:   "env <name> [-- <command> [args...]]",
+	Short: "Run with environment secrets",
+	Long: `Download and decrypt environment secrets, then execute a command with those secrets injected into the environment.
+
+The '--' separator is required to distinguish Vaulty flags from the child command.
+
+Examples:
+  vty run env api -- npm run build
+  vty run env api -e production -- npm run build
+  vty run env api --env staging -- sh -c 'npm run migrate && npm run start'`,
+	DisableFlagParsing: true,
+	RunE:               runRunEnv,
+}
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
 func runRunEnv(cmd *cobra.Command, args []string) error {
-	sepIndex := -1
-	for i, arg := range args {
+	if cmd.Flags().Changed("help") || contains(args, "-h") || contains(args, "--help") {
+		return cmd.Help()
+	}
+
+	name := ""
+	commandArgs := []string{}
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "-e" || arg == "--env" {
+			if i+1 < len(args) {
+				runEnv = args[i+1]
+				i++
+			}
+			continue
+		}
 		if arg == "--" {
-			sepIndex = i
+			commandArgs = args[i+1:]
 			break
+		}
+		if name == "" && (len(arg) == 0 || arg[0] != '-') {
+			name = arg
 		}
 	}
 
-	if sepIndex == -1 {
-		return fmt.Errorf("missing '--' separator. Usage: vty run env <name> [--env <env>] -- <command> [args...]")
+	if name == "" {
+		return cmd.Help()
 	}
 
-	if sepIndex == 0 || sepIndex >= len(args)-1 {
-		return fmt.Errorf("missing command after '--'. Usage: vty run env <name> [--env <env>] -- <command> [args...]")
-	}
-
-	name := args[0]
 	if err := cli.ValidateName(name); err != nil {
 		return err
 	}
 
-	commandArgs := args[sepIndex+1:]
 	if len(commandArgs) == 0 {
-		return fmt.Errorf("missing command after '--'. Usage: vty run env <name> [--env <env>] -- <command> [args...]")
+		return fmt.Errorf("missing command after '--'. Usage: vty run env <name> -- <command> [args...]")
 	}
 
 	cfg, err := config.Load("")
