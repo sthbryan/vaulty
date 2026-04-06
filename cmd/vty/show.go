@@ -11,8 +11,6 @@ var showCmd = &cobra.Command{
 	Short: "Display secret contents",
 	Long: `Display the contents of a secret with formatting.
 
-Uses 'bat' if available, otherwise falls back to 'cat'.
-
 Examples:
   vty show env api -e production
   vty show ssh laptop
