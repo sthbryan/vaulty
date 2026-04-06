@@ -161,7 +161,7 @@ func TestClientGetContent(t *testing.T) {
 	t.Run("returns error on non-200 status", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte(`{"message": "Not Found"}`))
+			_, _ = w.Write([]byte(`{"message": "Not Found"}`))
 		}))
 		defer server.Close()
 
@@ -220,7 +220,7 @@ func TestClientPutContent(t *testing.T) {
 	t.Run("returns error on non-2xx status", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`{"message": "Bad credentials"}`))
+			_, _ = w.Write([]byte(`{"message": "Bad credentials"}`))
 		}))
 		defer server.Close()
 
