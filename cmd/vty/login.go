@@ -16,14 +16,13 @@ import (
 
 var loginCmd = &cobra.Command{
 	Use:   "login",
-	Short: "Login to Vaulty with your credentials",
+	Short: "Login with credentials",
 	Long: `Login to Vaulty by authenticating as a specific user.
 
 This command will:
   • Prompt for username (with suggestion from config if available)
   • Prompt for master password
-  • Decrypt your keys and vault
-  • Create an active session`,
+  • Verify credentials and create an active session`,
 	RunE: runLogin,
 }
 

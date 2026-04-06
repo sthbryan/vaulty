@@ -14,19 +14,14 @@ import (
 
 var removeUserCmd = &cobra.Command{
 	Use:   "remove-user <username>",
-	Short: "Remove a user from the vault and rotate the master key",
-	Long: `Remove a user from Vaulty and rotate the master key.
+	Short: "Remove user and rotate master key",
+	Long: `Remove a user from Vaulty vault and rotate the master key.
 
-This command will:
-  1. Verify you are the vault owner
-  2. Decrypt the current vault with the old master key
-  3. Generate a new master key
-  4. Re-encrypt the vault with the new key
-  5. Re-encrypt the new key for all remaining users
-  6. Upload all changes to GitHub
-  7. Delete the removed user's key file
+This action is irreversible. The removed user will no longer have access
+to the vault.
 
-This action is irreversible. The removed user will no longer have access to the vault.`,
+Examples:
+  vty remove-user juan`,
 	Args: cobra.ExactArgs(1),
 	RunE: runRemoveUser,
 }

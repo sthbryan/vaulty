@@ -11,11 +11,21 @@ import (
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Configure Vaulty settings",
+	Long: `Manage Vaulty configuration settings.
+
+Use subcommands to configure specific settings.`,
 }
 
 var cacheDurationCmd = &cobra.Command{
 	Use:   "cache-duration [duration]",
 	Short: "Get or set password cache duration",
+	Long: `Get or set how long your master password is cached.
+
+Valid durations: 1m to 24h (e.g., '15m', '1h', '30m').
+
+Examples:
+  vty config cache-duration    # Show current duration
+  vty config cache-duration 1h # Set to 1 hour`,
 	RunE:  runCacheDuration,
 }
 

@@ -27,7 +27,6 @@ var pullResourceCmd = &cobra.Command{
 	Use:   "resource <name>",
 	Short: "Get file or directory",
 	Long: `Get file or directory from your vault.
-
 Examples:
   vty pull resource agents
   vty pull resource zellij --tag dev
@@ -40,7 +39,6 @@ var pullConfigCmd = &cobra.Command{
 	Use:   "config <name>",
 	Short: "Get config file or directory",
 	Long: `Get config file or directory from your vault.
-
 Examples:
   vty pull config opencode
   vty pull config zellij --tag team

@@ -18,18 +18,14 @@ var deleteCmd = &cobra.Command{
 	Long: `Delete secrets, environments, or the entire vault.
 
 Examples:
-  vty delete env <name>              # Delete secret from shared
-  vty delete env <name> --env=staging # Delete secret from environment
-  vty delete envs --env=staging       # Delete all secrets from environment
-  vty delete ssh <name>               # Delete SSH key
-  vty delete vault                     # Delete entire vault (owner only)`,
+  vty delete env <name> --env=staging
+  vty delete vault`,
 }
 
 var deleteEnvCmd = &cobra.Command{
 	Use:   "env <name>",
 	Short: "Delete a specific environment variable",
 	Long: `Delete a specific environment variable from the vault.
-
 If --env is not specified, deletes from shared (envs/{name}.vty).
 If --env is specified, deletes from envs/{env}/{name}.vty.`,
 	Args: cobra.ExactArgs(1),
@@ -40,7 +36,6 @@ var deleteEnvsCmd = &cobra.Command{
 	Use:   "envs",
 	Short: "Delete all secrets from an environment",
 	Long: `Delete all secrets from a specific environment.
-
 This will permanently remove all secrets from the specified environment.
 Use with caution - this action cannot be undone.`,
 	RunE: runDeleteEnvs,
@@ -50,7 +45,6 @@ var deleteSSHCmd = &cobra.Command{
 	Use:   "ssh <name>",
 	Short: "Delete an SSH key",
 	Long: `Delete an SSH key from the vault.
-
 Examples:
   vty delete ssh my-key
   vty delete ssh my-key -u username`,
@@ -60,7 +54,7 @@ Examples:
 
 var deleteVaultCmd = &cobra.Command{
 	Use:   "vault",
-	Short: "Delete entire vault (DESTRUCTIVE - owner only)",
+	Short: "Delete entire vault",
 	Long: `Delete the entire vault including all secrets, SSH keys, and users.
 
 This is a DESTRUCTIVE operation that will:

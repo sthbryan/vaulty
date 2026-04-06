@@ -15,7 +15,6 @@ var pullEnvCmd = &cobra.Command{
 	Use:   "env <name>",
 	Short: "Get environment variables",
 	Long: `Get environment variables from your vault.
-
 Examples:
   vty pull env myapp-prod
   vty pull env myapp-prod -o .env.production`,

@@ -15,10 +15,9 @@ var deleteResourceCmd = &cobra.Command{
 	Use:   "resource <name>",
 	Short: "Delete a resource from the vault",
 	Long: `Delete a file or directory from the resources/ directory.
-
 Examples:
-  vty delete resource agents
-  vty delete resource zellij --tag dev`,
+  vty delete resource <name>
+  vty delete resource <name> --tag dev`,
 	Args: cobra.ExactArgs(1),
 	RunE: runDeleteResource,
 }
@@ -27,10 +26,9 @@ var deleteConfigCmd = &cobra.Command{
 	Use:   "config <name>",
 	Short: "Delete a config from the vault",
 	Long: `Delete a file or directory from the config/ directory.
-
 Examples:
-  vty delete config opencode
-  vty delete config zellij --tag team`,
+  vty delete config <name>
+  vty delete config <name> --tag team`,
 	Args: cobra.ExactArgs(1),
 	RunE: runDeleteConfig,
 }

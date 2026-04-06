@@ -8,7 +8,7 @@ var importInput string
 
 var importCmd = &cobra.Command{
 	Use:   "import",
-	Short: "Import vault from a backup file",
+	Short: "Import vault from backup file",
 	Long: `Import secrets from a backup file created with 'vty export'.
 
 The backup file is decrypted using the vault password, and secrets are

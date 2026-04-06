@@ -19,6 +19,7 @@ var transferOwnerCmd = &cobra.Command{
 	Short: "Transfer ownership to another user",
 	Long: `Transfer ownership to another user in the vault.
 
+
 You must be the current owner to transfer ownership.
 The new owner must exist in the vault metadata.
 

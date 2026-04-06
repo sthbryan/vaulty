@@ -8,7 +8,7 @@ var exportOutput string
 
 var exportCmd = &cobra.Command{
 	Use:   "export",
-	Short: "Export vault to a backup file",
+	Short: "Export vault to backup file",
 	Long: `Export all secrets from the vault to a single encrypted backup file.
 
 The backup is encrypted with a password you provide and can be restored

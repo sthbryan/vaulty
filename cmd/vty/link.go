@@ -21,7 +21,7 @@ var linkLocalMode bool
 
 var linkCmd = &cobra.Command{
 	Use:   "link",
-	Short: "Link to an existing Vaulty vault",
+	Short: "Link to existing Vaulty vault",
 	Long: `Link your machine to an existing Vaulty vault.
 
 This command will:

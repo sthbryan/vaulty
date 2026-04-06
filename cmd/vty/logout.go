@@ -13,7 +13,15 @@ var logoutForce bool
 
 var logoutCmd = &cobra.Command{
 	Use:   "logout",
-	Short: "Clear stored master password and log out",
+	Short: "Clear stored password and log out",
+	Long: `Clear stored master password and end your active session.
+
+This command will:
+  • Remove your session from the session manager
+  • Clear the current user from configuration
+  • Keep cache and configuration files on disk
+
+You can re-login anytime with 'vty login'.`,
 	RunE:  runLogout,
 }
 

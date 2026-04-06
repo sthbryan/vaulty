@@ -11,7 +11,6 @@ var pullSSHCmd = &cobra.Command{
 	Use:   "ssh <name>",
 	Short: "Get SSH key",
 	Long: `Get SSH key from your vault.
-
 Examples:
   vty pull ssh my-key
   vty pull ssh team-key -u other   # Owner: get another user's key`,

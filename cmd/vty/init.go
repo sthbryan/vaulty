@@ -12,7 +12,7 @@ var localMode bool
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize Vaulty with a GitHub repository or local storage",
+	Short: "Initialize Vaulty with GitHub or local storage",
 	Long: `Initialize Vaulty by creating a new vault.
 
 This command will guide you through:
