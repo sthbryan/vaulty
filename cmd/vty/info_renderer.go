@@ -77,46 +77,109 @@ func renderDetailedVaultInfo(
 }
 
 func buildUserLines(users []config.UserEntry) []string {
+	if len(users) == 0 {
+		return []string{}
+	}
+
+	maxUserWidth := 0
+	maxRoleWidth := 0
+	for _, u := range users {
+		if len(u.Username) > maxUserWidth {
+			maxUserWidth = len(u.Username)
+		}
+		if len(u.Role) > maxRoleWidth {
+			maxRoleWidth = len(u.Role)
+		}
+	}
+
 	var lines []string
 	for _, u := range users {
-		lines = append(lines, fmt.Sprintf("%s  %s  %s",
-			ui.HighlightStyle.Render(u.Username),
-			u.Role,
+		lines = append(lines, fmt.Sprintf("%s %s %s",
+			padRight(ui.HighlightStyle.Render(u.Username), maxUserWidth),
+			padRight(u.Role, maxRoleWidth),
 			formatTime(u.CreatedAt)))
 	}
 	return lines
 }
 
 func buildVaultLines(secrets []models.SecretInfo) []string {
+	if len(secrets) == 0 {
+		return []string{}
+	}
+
+	nameWidth := 0
+	typeWidth := 0
+	envWidth := 0
+	sizeWidth := 0
+
+	for _, s := range secrets {
+		if len(s.Name) > nameWidth {
+			nameWidth = len(s.Name)
+		}
+		typeLen := len(string(s.Type))
+		if typeLen > typeWidth {
+			typeWidth = typeLen
+		}
+		envLen := 10
+		if s.Type != models.SecretTypeEnv {
+			envLen = 1
+		}
+		if envLen > envWidth {
+			envWidth = envLen
+		}
+		sizeLen := len(formatSize(s.Size))
+		if sizeLen > sizeWidth {
+			sizeWidth = sizeLen
+		}
+	}
+
 	var lines []string
 	for _, s := range secrets {
 		envDisplay := "-"
-		if s.Type == models.SecretTypeEnv && s.Environment != "" {
-			envDisplay = envBadge(s.Environment)
-		}
-		lines = append(lines, fmt.Sprintf("%s  %s  %s  %s  %s",
-			s.Name,
-			ui.HighlightStyle.Render(string(s.Type)),
-			envDisplay,
-			formatSize(s.Size),
-			formatTime(s.UpdatedAt)))
+		line := fmt.Sprintf("%s %s %s %s %s",
+			padRight(s.Name, nameWidth),
+			padRight(ui.HighlightStyle.Render(string(s.Type)), typeWidth),
+			padRight(envDisplay, envWidth),
+			padRight(formatSize(s.Size), sizeWidth),
+			formatTime(s.UpdatedAt))
+		lines = append(lines, line)
 	}
 	return lines
 }
 
 func buildSSHKeyLines(keys []github.SSHKeyInfo, role string) []string {
+	if len(keys) == 0 {
+		return []string{}
+	}
+
 	var lines []string
 	if role == "owner" {
+		maxUserWidth := 0
+		maxKeyWidth := 0
 		for _, k := range keys {
-			lines = append(lines, fmt.Sprintf("%s  %s  %s",
-				ui.HighlightStyle.Render(k.Username),
-				k.KeyName,
+			if len(k.Username) > maxUserWidth {
+				maxUserWidth = len(k.Username)
+			}
+			if len(k.KeyName) > maxKeyWidth {
+				maxKeyWidth = len(k.KeyName)
+			}
+		}
+		for _, k := range keys {
+			lines = append(lines, fmt.Sprintf("%s %s %s",
+				padRight(ui.HighlightStyle.Render(k.Username), maxUserWidth),
+				padRight(k.KeyName, maxKeyWidth),
 				formatSize(int64(k.Size))))
 		}
 	} else {
+		maxKeyWidth := 0
 		for _, k := range keys {
-			lines = append(lines, fmt.Sprintf("%s  %s",
-				k.KeyName,
+			if len(k.KeyName) > maxKeyWidth {
+				maxKeyWidth = len(k.KeyName)
+			}
+		}
+		for _, k := range keys {
+			lines = append(lines, fmt.Sprintf("%s %s",
+				padRight(k.KeyName, maxKeyWidth),
 				formatSize(int64(k.Size))))
 		}
 	}
@@ -124,8 +187,68 @@ func buildSSHKeyLines(keys []github.SSHKeyInfo, role string) []string {
 }
 
 func buildVaultInfoLines(cfg *config.Config, sess *session.Session, sshKeys []github.SSHKeyInfo, lastSync time.Time, vaultPath string) []string {
-	var lines []string
+	// Calculate max key width for alignment
+	maxKeyWidth := 0
+	var allLines []string
 
+	if sess.Role == "owner" {
+		allLines = append(allLines, "[@] SSH Breakdown:")
+		userKeyCounts := make(map[string]int)
+		userKeySizes := make(map[string]int64)
+		for _, key := range sshKeys {
+			userKeyCounts[key.Username]++
+			userKeySizes[key.Username] += int64(key.Size)
+		}
+		for username, count := range userKeyCounts {
+			line := fmt.Sprintf("  %s: %s (%s)",
+				ui.HighlightStyle.Render(username),
+				ui.HighlightStyle.Render(fmt.Sprintf("%d keys", count)),
+				ui.HighlightStyle.Render(formatSize(userKeySizes[username])))
+			allLines = append(allLines, line)
+			if len("  "+username) > maxKeyWidth {
+				maxKeyWidth = len("  " + username)
+			}
+		}
+	} else {
+		allLines = append(allLines, fmt.Sprintf("[@] SSH Keys: %s",
+			ui.HighlightStyle.Render(fmt.Sprintf("%d", len(sshKeys)))))
+		if len("[@] SSH Keys") > maxKeyWidth {
+			maxKeyWidth = len("[@] SSH Keys")
+		}
+	}
+
+	if sess.Role == "owner" && cfg.Metadata != nil {
+		ownerCount, editorCount, viewerCount := countUsersByRole(cfg.Metadata.Users)
+		line := fmt.Sprintf("[U] Users: %s total (%d own, %d ed, %d view)",
+			ui.HighlightStyle.Render(fmt.Sprintf("%d", len(cfg.Metadata.Users))),
+			ownerCount, editorCount, viewerCount)
+		allLines = append(allLines, line)
+		if len("[U] Users") > maxKeyWidth {
+			maxKeyWidth = len("[U] Users")
+		}
+	}
+
+	if cfg.IsLocalMode() {
+		allLines = append(allLines, fmt.Sprintf("[L] Vault:   %s", ui.HighlightStyle.Render("local")))
+		allLines = append(allLines, fmt.Sprintf("[R] Path:    %s", vaultPath))
+	} else {
+		allLines = append(allLines, fmt.Sprintf("[G] Vault:   %s", ui.HighlightStyle.Render("github")))
+		allLines = append(allLines, fmt.Sprintf("[R] Repo:    %s", cfg.Repo))
+	}
+
+	allLines = append(allLines, fmt.Sprintf("[<] Sync:    %s", ui.HighlightStyle.Render(formatTime(lastSync))))
+	allLines = append(allLines, fmt.Sprintf("[^] Updt:    %s", ui.HighlightStyle.Render(formatTime(cfg.UpdatedAt))))
+	allLines = append(allLines, fmt.Sprintf("[+] Created: %s", ui.HighlightStyle.Render(formatTime(cfg.CreatedAt))))
+
+	// Update maxKeyWidth with remaining keys
+	for _, key := range []string{"[L] Vault", "[R] Path", "[<] Sync", "[^] Updt", "[+] Created"} {
+		if len(key) > maxKeyWidth {
+			maxKeyWidth = len(key)
+		}
+	}
+
+	// Rebuild with alignment
+	var lines []string
 	if sess.Role == "owner" {
 		lines = append(lines, "[@] SSH Breakdown:")
 		userKeyCounts := make(map[string]int)
@@ -135,34 +258,35 @@ func buildVaultInfoLines(cfg *config.Config, sess *session.Session, sshKeys []gi
 			userKeySizes[key.Username] += int64(key.Size)
 		}
 		for username, count := range userKeyCounts {
-			lines = append(lines, fmt.Sprintf("  %s: %s (%s)",
-				ui.HighlightStyle.Render(username),
-				ui.HighlightStyle.Render(fmt.Sprintf("%d keys", count)),
+			lines = append(lines, fmt.Sprintf("  %s %s (%s)",
+				padRight(ui.HighlightStyle.Render(username), maxKeyWidth),
+				padRight(ui.HighlightStyle.Render(fmt.Sprintf("%d keys", count)), 8),
 				ui.HighlightStyle.Render(formatSize(userKeySizes[username]))))
 		}
 	} else {
-		lines = append(lines, fmt.Sprintf("[@] SSH Keys: %s",
+		lines = append(allLines, fmt.Sprintf("[@] SSH Keys: %s",
 			ui.HighlightStyle.Render(fmt.Sprintf("%d", len(sshKeys)))))
 	}
 
 	if sess.Role == "owner" && cfg.Metadata != nil {
 		ownerCount, editorCount, viewerCount := countUsersByRole(cfg.Metadata.Users)
-		lines = append(lines, fmt.Sprintf("[U] Users: %s total (%d own, %d ed, %d view)",
+		lines = append(lines, fmt.Sprintf("%s %s total (%d own, %d ed, %d view)",
+			padRight("[U] Users", maxKeyWidth),
 			ui.HighlightStyle.Render(fmt.Sprintf("%d", len(cfg.Metadata.Users))),
 			ownerCount, editorCount, viewerCount))
 	}
 
 	if cfg.IsLocalMode() {
-		lines = append(lines, fmt.Sprintf("[L] Vault:   %s", ui.HighlightStyle.Render("local")))
-		lines = append(lines, fmt.Sprintf("[R] Path:    %s", vaultPath))
+		lines = append(lines, fmt.Sprintf("%s %s", padRight("[L] Vault", maxKeyWidth), ui.HighlightStyle.Render("local")))
+		lines = append(lines, fmt.Sprintf("%s %s", padRight("[R] Path", maxKeyWidth), vaultPath))
 	} else {
-		lines = append(lines, fmt.Sprintf("[G] Vault:   %s", ui.HighlightStyle.Render("github")))
-		lines = append(lines, fmt.Sprintf("[R] Repo:    %s", cfg.Repo))
+		lines = append(lines, fmt.Sprintf("%s %s", padRight("[G] Vault", maxKeyWidth), ui.HighlightStyle.Render("github")))
+		lines = append(lines, fmt.Sprintf("%s %s", padRight("[R] Repo", maxKeyWidth), cfg.Repo))
 	}
 
-	lines = append(lines, fmt.Sprintf("[<] Sync:    %s", ui.HighlightStyle.Render(formatTime(lastSync))))
-	lines = append(lines, fmt.Sprintf("[^] Updt:    %s", ui.HighlightStyle.Render(formatTime(cfg.UpdatedAt))))
-	lines = append(lines, fmt.Sprintf("[+] Created: %s", ui.HighlightStyle.Render(formatTime(cfg.CreatedAt))))
+	lines = append(lines, fmt.Sprintf("%s %s", padRight("[<] Sync", maxKeyWidth), ui.HighlightStyle.Render(formatTime(lastSync))))
+	lines = append(lines, fmt.Sprintf("%s %s", padRight("[^] Updt", maxKeyWidth), ui.HighlightStyle.Render(formatTime(cfg.UpdatedAt))))
+	lines = append(lines, fmt.Sprintf("%s %s", padRight("[+] Created", maxKeyWidth), ui.HighlightStyle.Render(formatTime(cfg.CreatedAt))))
 
 	return lines
 }
@@ -197,15 +321,6 @@ func countUsersByRole(users []config.UserEntry) (owners, editors, viewers int) {
 		}
 	}
 	return
-}
-
-func envBadge(env string) string {
-	switch env {
-	case "shared":
-		return "[*] shared"
-	default:
-		return "[@] " + env
-	}
 }
 
 func formatSize(bytes int64) string {
@@ -266,4 +381,13 @@ func stripANSI(s string) string {
 		}
 	}
 	return result.String()
+}
+
+func padRight(s string, width int) string {
+	stripped := stripANSI(s)
+	padding := width - len(stripped)
+	if padding < 0 {
+		padding = 0
+	}
+	return s + strings.Repeat(" ", padding)
 }
