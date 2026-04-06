@@ -53,7 +53,7 @@ func runShowEnv(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("secret not found: %s", name)
 	}
 
-	return displayContent(encodedData, sess.MasterKey, name, "env")
+	return displayContent(encodedData, sess.MasterKey, "env")
 }
 
 func runShowSSH(cmd *cobra.Command, args []string) error {
@@ -139,7 +139,7 @@ func runShowResource(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	return displayContent(content, sess.MasterKey, name, "resource")
+	return displayContent(content, sess.MasterKey, "resource")
 }
 
 func runShowConfig(cmd *cobra.Command, args []string) error {
@@ -173,10 +173,10 @@ func runShowConfig(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("config not found: %s", name)
 	}
 
-	return displayContent(content, sess.MasterKey, name, "config")
+	return displayContent(content, sess.MasterKey, "config")
 }
 
-func displayContent(encodedData []byte, masterKey []byte, name, secretType string) error {
+func displayContent(encodedData []byte, masterKey []byte, secretType string) error {
 	hexData := string(encodedData)
 	vaultJSON, err := crypto.DecryptBinary(hexData, masterKey)
 	if err != nil {
@@ -196,7 +196,7 @@ func displayContent(encodedData []byte, masterKey []byte, name, secretType strin
 		return fmt.Errorf("decompressing: %w", err)
 	}
 
-	return printWithPager(content, name, secretType)
+	return printWithPager(content, secretType)
 }
 
 func displaySSHPreview(content []byte, name string) error {
@@ -250,7 +250,7 @@ func getSSHFingerprint(content []byte) (string, error) {
 	return strings.TrimSpace(out.String()), nil
 }
 
-func printWithPager(content []byte, name, secretType string) error {
+func printWithPager(content []byte, secretType string) error {
 
 	if _, err := exec.LookPath("bat"); err == nil {
 
