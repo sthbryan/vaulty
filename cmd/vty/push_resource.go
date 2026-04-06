@@ -14,7 +14,7 @@ import (
 	"github.com/sthbryan/vaulty/internal/compress"
 	"github.com/sthbryan/vaulty/internal/config"
 	"github.com/sthbryan/vaulty/internal/crypto"
-	"github.com/sthbryan/vaulty/internal/models"
+	"github.com/sthbryan/vaulty/pkg/models"
 	"github.com/sthbryan/vaulty/internal/storage"
 	"github.com/sthbryan/vaulty/internal/ui"
 )
@@ -56,6 +56,11 @@ Examples:
   vty push config zellij ~/.config/zellij --tag team
   vty push config vscode-settings ~/Library/Application\ Support/Code/User/settings.json`,
 	RunE: runPushConfig,
+}
+
+type ResourceVaultFile struct {
+	Metadata models.ResourceMetadata `json:"metadata"`
+	Data     []byte                  `json:"data"`
 }
 
 func runPushResource(cmd *cobra.Command, args []string) error {
@@ -235,22 +240,6 @@ func uploadResourceToStorage(s storage.Storage, remotePath string, vaultData []b
 
 	if !cfg.IsLocalMode() {
 		ui.PrintSuccess("Uploaded to GitHub")
-	}
-
-	return nil
-}
-
-func validateFile(path string) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("file not found: %s", path)
-		}
-		return fmt.Errorf("cannot access file: %w", err)
-	}
-
-	if info.IsDir() {
-		return fmt.Errorf("expected a file, got directory: %s", path)
 	}
 
 	return nil
