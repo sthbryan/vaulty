@@ -219,7 +219,10 @@ func runInfoLocal(_ *cobra.Command, _ []string, cfg *config.Config, s storage.St
 	if err == nil {
 		for _, env := range envs {
 			var envName string
-			if env == "." {
+			isSharedEnv := strings.HasSuffix(env, ".vty")
+			if isSharedEnv {
+				envName = strings.TrimSuffix(env, ".vty")
+			} else if env == "." || env == "shared" {
 				envName = "shared"
 			} else {
 				envName = env
@@ -235,9 +238,15 @@ func runInfoLocal(_ *cobra.Command, _ []string, cfg *config.Config, s storage.St
 				continue
 			}
 
-			homeDir, _ := os.UserHomeDir()
-			filePath := filepath.Join(homeDir, ".vty", "vault", "envs", env+".vty")
-			info, _ := os.Stat(filePath)
+			var size int64
+			if isSharedEnv {
+				homeDir, _ := os.UserHomeDir()
+				filePath := filepath.Join(homeDir, ".vty", "vault", "envs", env)
+				info, _ := os.Stat(filePath)
+				if info != nil {
+					size = info.Size()
+				}
+			}
 
 			for _, secretName := range envSecrets {
 				secrets = append(secrets, models.SecretInfo{
@@ -249,13 +258,15 @@ func runInfoLocal(_ *cobra.Command, _ []string, cfg *config.Config, s storage.St
 				})
 			}
 
-			if info != nil {
-				for i := range secrets {
-					if secrets[i].Type == models.SecretTypeEnv && secrets[i].Environment == envName {
-						secrets[i].UpdatedAt = info.ModTime()
-						secrets[i].Size = info.Size()
-					}
-				}
+			if isSharedEnv && size > 0 {
+				secrets = append(secrets, models.SecretInfo{
+					Name:        envName,
+					Type:        models.SecretTypeEnv,
+					Environment: "shared",
+					CreatedAt:   time.Time{},
+					UpdatedAt:   time.Time{},
+					Size:        size,
+				})
 			}
 		}
 	}

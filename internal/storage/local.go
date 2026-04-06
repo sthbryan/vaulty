@@ -209,8 +209,7 @@ func (l *LocalStorage) ListEnvs(ctx context.Context) ([]string, error) {
 		if entry.IsDir() {
 			envs = append(envs, entry.Name())
 		} else if strings.HasSuffix(entry.Name(), ".vty") {
-			name := strings.TrimSuffix(entry.Name(), ".vty")
-			envs = append(envs, name)
+			envs = append(envs, entry.Name())
 		}
 	}
 
@@ -223,6 +222,12 @@ func (l *LocalStorage) ListEnvSecrets(ctx context.Context, env string) ([]string
 	}
 
 	envPath := filepath.Join(l.baseDir, "envs", env)
+
+	info, err := os.Stat(envPath)
+	if err == nil && !info.IsDir() {
+		return []string{}, nil
+	}
+
 	entries, err := os.ReadDir(envPath)
 	if err != nil {
 		if os.IsNotExist(err) {

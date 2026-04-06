@@ -331,7 +331,6 @@ func runImport(cmd *cobra.Command, args []string) error {
 	fmt.Print("Type 'yes' to confirm: ")
 	var confirm string
 	if _, err := fmt.Scanln(&confirm); err != nil {
-		// User didn't provide input, treat as cancellation
 		confirm = ""
 	}
 	if confirm != "yes" {
