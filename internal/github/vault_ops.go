@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DeadBryam/vaulty/internal/crypto"
+	"github.com/sthbryan/vaulty/internal/crypto"
 )
 
 func (c *Client) GetMetadata(ctx context.Context, owner, repo string) ([]byte, error) {

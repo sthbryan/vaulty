@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/session"
-	"github.com/DeadBryam/vaulty/internal/storage"
-	"github.com/DeadBryam/vaulty/internal/ui"
-	"github.com/DeadBryam/vaulty/pkg/application/usecases/auth"
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
+	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/session"
+	"github.com/sthbryan/vaulty/internal/storage"
+	"github.com/sthbryan/vaulty/internal/ui"
+	"github.com/sthbryan/vaulty/pkg/application/usecases/auth"
 )
 
 var loginCmd = &cobra.Command{
@@ -110,7 +110,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	fmt.Println(ui.MutedStyle.Render("Validating credentials..."))
 
 	output, err := loginUseCase.Execute(ctx, auth.LoginInput{
-		Username:      username,
+		Username:       username,
 		MasterPassword: masterPassword,
 	})
 	if err != nil {

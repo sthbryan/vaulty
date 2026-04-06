@@ -3,10 +3,10 @@ package main
 import (
 	"fmt"
 
-	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/session"
-	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
+	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/session"
+	"github.com/sthbryan/vaulty/internal/ui"
 )
 
 var logoutForce bool

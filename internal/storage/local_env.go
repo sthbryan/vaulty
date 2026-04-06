@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/DeadBryam/vaulty/internal/application/ports"
+	"github.com/sthbryan/vaulty/internal/application/ports"
 )
 
 type LocalEnvStorage struct {

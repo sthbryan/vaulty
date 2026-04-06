@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/DeadBryam/vaulty/internal/crypto"
+	"github.com/sthbryan/vaulty/internal/crypto"
 )
 
 type LocalVaultStorage struct {

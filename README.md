@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/DeadBryam/vaulty)](https://github.com/DeadBryam/vaulty/releases)
+[![Release](https://img.shields.io/github/v/release/sthbryan/vaulty)](https://github.com/sthbryan/vaulty/releases)
 
 **Secure environment and SSH key vault synced with GitHub**
 
@@ -34,26 +34,26 @@ Vaulty is a secure CLI tool for managing environment variables, SSH keys, and te
 
 ### From Releases (Recommended)
 
-Download the latest binary for your platform from the [releases page](https://github.com/DeadBryam/vaulty/releases):
+Download the latest binary for your platform from the [releases page](https://github.com/sthbryan/vaulty/releases):
 
 ```bash
 # macOS (Apple Silicon)
-curl -L https://github.com/DeadBryam/vaulty/releases/latest/download/vty-darwin-arm64 -o vty
+curl -L https://github.com/sthbryan/vaulty/releases/latest/download/vty-darwin-arm64 -o vty
 chmod +x vty
 sudo mv vty /usr/local/bin/
 
 # macOS (Intel)
-curl -L https://github.com/DeadBryam/vaulty/releases/latest/download/vty-darwin-amd64 -o vty
+curl -L https://github.com/sthbryan/vaulty/releases/latest/download/vty-darwin-amd64 -o vty
 chmod +x vty
 sudo mv vty /usr/local/bin/
 
 # Linux (AMD64)
-curl -L https://github.com/DeadBryam/vaulty/releases/latest/download/vty-linux-amd64 -o vty
+curl -L https://github.com/sthbryan/vaulty/releases/latest/download/vty-linux-amd64 -o vty
 chmod +x vty
 sudo mv vty /usr/local/bin/
 
 # Linux (ARM64)
-curl -L https://github.com/DeadBryam/vaulty/releases/latest/download/vty-linux-arm64 -o vty
+curl -L https://github.com/sthbryan/vaulty/releases/latest/download/vty-linux-arm64 -o vty
 chmod +x vty
 sudo mv vty /usr/local/bin/
 ```
@@ -61,13 +61,13 @@ sudo mv vty /usr/local/bin/
 ### Using Go Install
 
 ```bash
-go install github.com/DeadBryam/vaulty/cmd/vty@latest
+go install github.com/sthbryan/vaulty/cmd/vty@latest
 ```
 
 ### Build from Source
 
 ```bash
-git clone https://github.com/DeadBryam/vaulty.git
+git clone https://github.com/sthbryan/vaulty.git
 cd vaulty
 make build        # Build for current platform
 make build-all    # Build for all platforms
@@ -195,8 +195,8 @@ We welcome contributions! See [Contributing Guide](CONTRIBUTING.md) for details.
 
 ### Report Issues
 
-- [Bug Report](https://github.com/DeadBryam/vaulty/issues/new?template=bug_report.md)
-- [Feature Request](https://github.com/DeadBryam/vaulty/issues/new?template=feature_request.md)
+- [Bug Report](https://github.com/sthbryan/vaulty/issues/new?template=bug_report.md)
+- [Feature Request](https://github.com/sthbryan/vaulty/issues/new?template=feature_request.md)
 
 ---
 
@@ -208,6 +208,6 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 <div align="center">
 
-Made with care by [DeadBryam](https://github.com/DeadBryam)
+Made with care by [sthbryan](https://github.com/sthbryan)
 
 </div>

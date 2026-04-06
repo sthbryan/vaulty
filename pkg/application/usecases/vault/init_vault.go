@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/crypto"
-	"github.com/DeadBryam/vaulty/internal/github"
-	"github.com/DeadBryam/vaulty/internal/session"
-	"github.com/DeadBryam/vaulty/internal/storage"
+	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/crypto"
+	"github.com/sthbryan/vaulty/internal/github"
+	"github.com/sthbryan/vaulty/internal/session"
+	"github.com/sthbryan/vaulty/internal/storage"
 )
 
 type InitVaultInput struct {

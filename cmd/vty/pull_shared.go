@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DeadBryam/vaulty/internal/cli"
-	"github.com/DeadBryam/vaulty/internal/compress"
-	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/crypto"
-	"github.com/DeadBryam/vaulty/internal/session"
-	"github.com/DeadBryam/vaulty/internal/storage"
-	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/charmbracelet/huh"
+	"github.com/sthbryan/vaulty/internal/cli"
+	"github.com/sthbryan/vaulty/internal/compress"
+	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/crypto"
+	"github.com/sthbryan/vaulty/internal/session"
+	"github.com/sthbryan/vaulty/internal/storage"
+	"github.com/sthbryan/vaulty/internal/ui"
 )
 
 func pullSecretWithRemotePath(name, remotePath string, sess *session.Session) error {

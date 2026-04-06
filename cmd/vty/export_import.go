@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DeadBryam/vaulty/internal/compress"
-	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/crypto"
-	"github.com/DeadBryam/vaulty/internal/github"
-	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
+	"github.com/sthbryan/vaulty/internal/compress"
+	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/crypto"
+	"github.com/sthbryan/vaulty/internal/github"
+	"github.com/sthbryan/vaulty/internal/ui"
 )
 
 type BackupEntry struct {

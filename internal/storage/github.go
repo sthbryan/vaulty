@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/sthbryan/vaulty/internal/github"
 )
 
 type GitHubStorage struct {

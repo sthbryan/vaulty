@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/sthbryan/vaulty/internal/github"
 )
 
 type GitHubUserStorage struct {

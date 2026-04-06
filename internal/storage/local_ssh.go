@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/DeadBryam/vaulty/internal/application/ports"
+	"github.com/sthbryan/vaulty/internal/application/ports"
 )
 
 type LocalSSHStorage struct {

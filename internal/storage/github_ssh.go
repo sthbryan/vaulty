@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DeadBryam/vaulty/internal/application/ports"
-	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/sthbryan/vaulty/internal/application/ports"
+	"github.com/sthbryan/vaulty/internal/github"
 )
 
 type GitHubSSHStorage struct {

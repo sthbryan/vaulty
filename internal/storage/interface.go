@@ -3,7 +3,7 @@ package storage
 import (
 	"context"
 
-	"github.com/DeadBryam/vaulty/internal/github"
+	"github.com/sthbryan/vaulty/internal/github"
 )
 
 type SSHKeyInfo struct {

@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/DeadBryam/vaulty/internal/cache"
-	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/crypto"
-	"github.com/DeadBryam/vaulty/internal/password"
-	"github.com/DeadBryam/vaulty/internal/session"
-	"github.com/DeadBryam/vaulty/internal/storage"
+	"github.com/sthbryan/vaulty/internal/cache"
+	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/crypto"
+	"github.com/sthbryan/vaulty/internal/password"
+	"github.com/sthbryan/vaulty/internal/session"
+	"github.com/sthbryan/vaulty/internal/storage"
 )
 
 type LoginUseCase struct {
@@ -22,12 +22,12 @@ func NewLoginUseCase(factory *storage.Factory) *LoginUseCase {
 }
 
 type LoginInput struct {
-	Username      string
+	Username       string
 	MasterPassword string
 }
 
 type LoginOutput struct {
-	Session *session.Session
+	Session  *session.Session
 	Metadata *config.Metadata
 }
 

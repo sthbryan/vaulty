@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DeadBryam/vaulty/internal/cli"
-	"github.com/DeadBryam/vaulty/internal/compress"
-	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/spf13/cobra"
+	"github.com/sthbryan/vaulty/internal/cli"
+	"github.com/sthbryan/vaulty/internal/compress"
+	"github.com/sthbryan/vaulty/internal/crypto"
 )
 
 func runShowEnv(cmd *cobra.Command, args []string) error {

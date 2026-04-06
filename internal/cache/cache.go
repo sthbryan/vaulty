@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/DeadBryam/vaulty/internal/crypto"
-	"github.com/DeadBryam/vaulty/internal/password"
+	"github.com/sthbryan/vaulty/internal/crypto"
+	"github.com/sthbryan/vaulty/internal/password"
 )
 
 const CacheTTL = 24 * time.Hour

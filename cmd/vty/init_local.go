@@ -6,13 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/password"
-	"github.com/DeadBryam/vaulty/internal/session"
-	"github.com/DeadBryam/vaulty/internal/storage"
-	"github.com/DeadBryam/vaulty/internal/ui"
-	"github.com/DeadBryam/vaulty/pkg/application/usecases/vault"
 	"github.com/charmbracelet/huh"
+	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/password"
+	"github.com/sthbryan/vaulty/internal/session"
+	"github.com/sthbryan/vaulty/internal/storage"
+	"github.com/sthbryan/vaulty/internal/ui"
+	"github.com/sthbryan/vaulty/pkg/application/usecases/vault"
 )
 
 func selectEnvironments() ([]string, error) {

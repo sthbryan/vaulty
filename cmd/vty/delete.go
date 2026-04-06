@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/spf13/cobra"
+	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/storage"
 )
 
 var (

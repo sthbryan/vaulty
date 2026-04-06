@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/DeadBryam/vaulty/internal/cli"
-	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
+	"github.com/sthbryan/vaulty/internal/cli"
+	"github.com/sthbryan/vaulty/internal/ui"
 )
 
 func runDeleteSSH(cmd *cobra.Command, args []string) error {

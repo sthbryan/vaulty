@@ -2,19 +2,21 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"time"
 
-	"github.com/DeadBryam/vaulty/internal/compress"
-	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/crypto"
-	"github.com/DeadBryam/vaulty/internal/models"
-	"github.com/DeadBryam/vaulty/internal/storage"
-	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
+	"github.com/sthbryan/vaulty/internal/compress"
+	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/crypto"
+	"github.com/sthbryan/vaulty/internal/models"
+	"github.com/sthbryan/vaulty/internal/storage"
+	"github.com/sthbryan/vaulty/internal/ui"
 )
 
 var (

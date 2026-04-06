@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
+	"github.com/sthbryan/vaulty/internal/ui"
 )
 
 var deleteResourceTag string

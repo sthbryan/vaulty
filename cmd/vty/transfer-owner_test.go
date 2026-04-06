@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/DeadBryam/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/config"
 )
 
 func TestPrepareTransferMetadata_UpdatesOwnerAndRoles(t *testing.T) {

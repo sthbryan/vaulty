@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/spf13/cobra"
+	"github.com/sthbryan/vaulty/internal/config"
 )
 
 var configCmd = &cobra.Command{

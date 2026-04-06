@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 
-	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/github"
-	"github.com/DeadBryam/vaulty/internal/ui"
-	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
+	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/github"
+	"github.com/sthbryan/vaulty/internal/ui"
+	"github.com/sthbryan/vaulty/pkg/models"
 )
 
 func renderUsersTable(users []config.UserEntry) {

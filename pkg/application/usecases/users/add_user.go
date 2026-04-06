@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/crypto"
-	"github.com/DeadBryam/vaulty/internal/storage"
+	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/crypto"
+	"github.com/sthbryan/vaulty/internal/storage"
 )
 
 type AddUserInput struct {
@@ -17,7 +17,7 @@ type AddUserInput struct {
 	OwnerPassword string
 }
 
-type AddUserOutput struct {}
+type AddUserOutput struct{}
 
 type AddUserUseCase struct {
 	storageFactory *storage.Factory

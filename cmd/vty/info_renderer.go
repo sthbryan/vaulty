@@ -5,12 +5,12 @@ import (
 	"sort"
 	"time"
 
-	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/github"
-	"github.com/DeadBryam/vaulty/internal/session"
-	"github.com/DeadBryam/vaulty/internal/ui"
-	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/github"
+	"github.com/sthbryan/vaulty/internal/session"
+	"github.com/sthbryan/vaulty/internal/ui"
+	"github.com/sthbryan/vaulty/pkg/models"
 )
 
 func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets []models.SecretInfo, sshKeys []github.SSHKeyInfo, lastSync time.Time) {

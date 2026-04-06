@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/password"
-	"github.com/DeadBryam/vaulty/internal/storage"
-	"github.com/DeadBryam/vaulty/internal/ui"
-	"github.com/DeadBryam/vaulty/pkg/application/usecases/users"
 	"github.com/spf13/cobra"
+	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/password"
+	"github.com/sthbryan/vaulty/internal/storage"
+	"github.com/sthbryan/vaulty/internal/ui"
+	"github.com/sthbryan/vaulty/pkg/application/usecases/users"
 )
 
 var removeUserCmd = &cobra.Command{

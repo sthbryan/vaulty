@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/github"
-	"github.com/DeadBryam/vaulty/internal/ui"
 	"github.com/spf13/cobra"
+	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/github"
+	"github.com/sthbryan/vaulty/internal/ui"
 )
 
 func runDeleteVault(cmd *cobra.Command, args []string) error {

@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/spf13/cobra"
+	"github.com/sthbryan/vaulty/internal/config"
 )
 
 func runPullSSH(cmd *cobra.Command, args []string) error {

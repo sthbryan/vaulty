@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/DeadBryam/vaulty/internal/ui"
-	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/spf13/cobra"
+	"github.com/sthbryan/vaulty/internal/ui"
+	"github.com/sthbryan/vaulty/pkg/models"
 )
 
 func runPushEnv(cmd *cobra.Command, args []string) error {

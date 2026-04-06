@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/password"
-	"github.com/DeadBryam/vaulty/internal/session"
-	"github.com/DeadBryam/vaulty/internal/storage"
-	authusecase "github.com/DeadBryam/vaulty/pkg/application/usecases/auth"
+	"github.com/sthbryan/vaulty/internal/config"
+	"github.com/sthbryan/vaulty/internal/password"
+	"github.com/sthbryan/vaulty/internal/session"
+	"github.com/sthbryan/vaulty/internal/storage"
+	authusecase "github.com/sthbryan/vaulty/pkg/application/usecases/auth"
 )
 
 func ensureAuthenticated(cfg *config.Config) (*session.Session, error) {
