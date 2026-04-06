@@ -1,6 +1,7 @@
 ## Code Quality
 - Delete unused code — never comment it out
 - No token waste: skip obvious explanations, be direct
+- Always use golangci-lint to format and lint code before committing
 
 ## Git Discipline
 - Atomic commits: one logical change per commit
