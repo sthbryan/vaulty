@@ -8,6 +8,36 @@ import (
 	"github.com/sthbryan/vaulty/pkg/models"
 )
 
+var (
+	pushForce bool
+	pushEnv   string
+)
+
+var pushEnvCmd = &cobra.Command{
+	Use:   "env <name> <path>",
+	Short: "Push an environment file to Vaulty",
+	Long: `Compress, encrypt, and upload an environment file to your Vaulty repository.
+
+
+The file will be:
+  1. Compressed using gzip for efficiency
+  2. Encrypted using AES-256-GCM with your password
+  3. Uploaded to your GitHub repository in the envs/ directory
+
+Examples:
+  vty push env production .env.production
+  vty push env staging .env.staging --force`,
+	Args: cobra.ExactArgs(2),
+	RunE: runPushEnv,
+}
+
+
+func init() {
+	pushCmd.AddCommand(pushEnvCmd)
+	pushEnvCmd.Flags().BoolVarP(&pushForce, "force", "f", false, "Overwrite without prompting")
+	pushEnvCmd.Flags().StringVarP(&pushEnv, "env", "e", "", "Target environment (optional: production, staging, development)")
+}
+
 func runPushEnv(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	path := args[1]

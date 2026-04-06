@@ -55,6 +55,11 @@ Examples:
 	RunE: runPushConfig,
 }
 
+func init() {
+	pushCmd.AddCommand(pushResourceCmd)
+	pushCmd.AddCommand(pushConfigCmd)
+}
+
 type ResourceVaultFile struct {
 	Metadata models.ResourceMetadata `json:"metadata"`
 	Data     []byte                  `json:"data"`

@@ -8,6 +8,32 @@ import (
 	"github.com/sthbryan/vaulty/pkg/models"
 )
 
+var pushSSHCmd = &cobra.Command{
+	Use:   "ssh <name> <path>",
+	Short: "Push an SSH key to Vaulty",
+	Long: `Compress, encrypt, and upload an SSH private key to your Vaulty repository.
+
+
+The file will be:
+  1. Compressed using gzip for efficiency
+  2. Encrypted using AES-256-GCM with your password
+  3. Uploaded to ssh/{username}/{name}.vty in your repository
+
+Only owners and editors can push SSH keys to their own directory.
+Viewers cannot push any secrets.
+
+Examples:
+  vty push ssh laptop ~/.ssh/id_rsa
+  vty push ssh server ~/.ssh/server_key --force`,
+	Args: cobra.ExactArgs(2),
+	RunE: runPushSSH,
+}
+
+func init() {
+	pushCmd.AddCommand(pushSSHCmd)
+	pushSSHCmd.Flags().BoolVarP(&pushForce, "force", "f", false, "Overwrite without prompting")
+}
+
 func runPushSSH(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	path := args[1]
