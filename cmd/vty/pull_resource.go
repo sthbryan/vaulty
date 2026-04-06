@@ -25,8 +25,8 @@ var pullResourceTag string
 
 var pullResourceCmd = &cobra.Command{
 	Use:   "resource <name>",
-	Short: "Pull a file or directory from resources",
-	Long: `Download and decrypt a file or directory from the resources/ directory.
+	Short: "Get file or directory",
+	Long: `Get file or directory from your vault.
 
 Examples:
   vty pull resource agents
@@ -38,8 +38,8 @@ Examples:
 
 var pullConfigCmd = &cobra.Command{
 	Use:   "config <name>",
-	Short: "Pull a file or directory from config",
-	Long: `Download and decrypt a file or directory from the config/ directory.
+	Short: "Get config file or directory",
+	Long: `Get config file or directory from your vault.
 
 Examples:
   vty pull config opencode
@@ -179,6 +179,9 @@ func runPullResourceOrConfig(name, baseDir string) error {
 }
 
 func init() {
+	pullCmd.AddCommand(pullResourceCmd)
+	pullCmd.AddCommand(pullConfigCmd)
+
 	pullResourceCmd.Flags().StringVarP(&pullResourceTag, "tag", "t", "", "Tag of the resource (e.g., dev, team)")
 	pullResourceCmd.Flags().StringVarP(&pullOutput, "output", "o", "", "Output filename or directory")
 	pullResourceCmd.Flags().BoolVarP(&pullInteractive, "interactive", "i", false, "Interactive mode")
@@ -186,7 +189,4 @@ func init() {
 	pullConfigCmd.Flags().StringVarP(&pullResourceTag, "tag", "t", "", "Tag of the config (e.g., dev, team)")
 	pullConfigCmd.Flags().StringVarP(&pullOutput, "output", "o", "", "Output filename or directory")
 	pullConfigCmd.Flags().BoolVarP(&pullInteractive, "interactive", "i", false, "Interactive mode")
-
-	pullCmd.AddCommand(pullResourceCmd)
-	pullCmd.AddCommand(pullConfigCmd)
 }

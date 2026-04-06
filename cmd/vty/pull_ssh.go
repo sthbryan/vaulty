@@ -7,6 +7,25 @@ import (
 	"github.com/sthbryan/vaulty/internal/config"
 )
 
+var pullSSHCmd = &cobra.Command{
+	Use:   "ssh <name>",
+	Short: "Get SSH key",
+	Long: `Get SSH key from your vault.
+
+Examples:
+  vty pull ssh my-key
+  vty pull ssh team-key -u other   # Owner: get another user's key`,
+	Args: cobra.ExactArgs(1),
+	RunE: runPullSSH,
+}
+
+func init() {
+	pullCmd.AddCommand(pullSSHCmd)
+	pullSSHCmd.Flags().StringVarP(&pullOutput, "output", "o", "", "Output filename")
+	pullSSHCmd.Flags().BoolVarP(&pullInteractive, "interactive", "i", false, "Interactive mode")
+	pullSSHCmd.Flags().StringVarP(&pullUser, "user", "u", "", "Target user (owner only)")
+}
+
 func runPullSSH(cmd *cobra.Command, args []string) error {
 	name := args[0]
 

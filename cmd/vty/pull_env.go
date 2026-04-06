@@ -11,6 +11,25 @@ import (
 	"github.com/sthbryan/vaulty/internal/ui"
 )
 
+var pullEnvCmd = &cobra.Command{
+	Use:   "env <name>",
+	Short: "Get environment variables",
+	Long: `Get environment variables from your vault.
+
+Examples:
+  vty pull env myapp-prod
+  vty pull env myapp-prod -o .env.production`,
+	Args: cobra.ExactArgs(1),
+	RunE: runPullEnv,
+}
+
+func init() {
+	pullCmd.AddCommand(pullEnvCmd)
+	pullEnvCmd.Flags().StringVarP(&pullOutput, "output", "o", "", "Output filename (default: .env, use - for stdout)")
+	pullEnvCmd.Flags().BoolVarP(&pullInteractive, "interactive", "i", false, "Interactive mode")
+	pullEnvCmd.Flags().StringVarP(&pullEnv, "env", "e", "", "Source environment")
+}
+
 func runPullEnv(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	if err := validateName(name); err != nil {
