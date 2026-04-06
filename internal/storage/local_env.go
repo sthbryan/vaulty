@@ -137,7 +137,7 @@ func (l *LocalEnvStorage) DeleteEnv(ctx context.Context, env, name string) error
 
 	if env != "" {
 		envDir := filepath.Join(l.baseDir, "envs", env)
-		l.cleanEmptyDir(envDir)
+		_ = l.cleanEmptyDir(envDir)
 	}
 	return nil
 }

@@ -81,7 +81,7 @@ func (l *LocalSSHStorage) DeleteSSHKey(ctx context.Context, username, keyName, s
 		return fmt.Errorf("failed to delete SSH key: %w", err)
 	}
 	userDir := filepath.Join(l.baseDir, "ssh", username)
-	l.cleanEmptyDir(userDir)
+	_ = l.cleanEmptyDir(userDir)
 	return nil
 }
 

@@ -123,7 +123,7 @@ func (l *LocalResourceStorage) DeleteResource(ctx context.Context, path string) 
 	}
 
 	dir := filepath.Dir(fullPath)
-	l.cleanEmptyDir(dir)
+	_ = l.cleanEmptyDir(dir)
 	return nil
 }
 

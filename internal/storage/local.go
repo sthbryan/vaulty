@@ -169,7 +169,7 @@ func (l *LocalStorage) DeleteSSHKey(ctx context.Context, username, keyName, sha 
 	}
 
 	userDir := filepath.Join(l.baseDir, "ssh", username)
-	l.cleanEmptyDir(userDir)
+	_ = l.cleanEmptyDir(userDir)
 
 	return nil
 }
@@ -298,9 +298,7 @@ func (l *LocalStorage) DeleteEnv(ctx context.Context, env, name string) error {
 
 	if env != "" {
 		envDir := filepath.Join(l.baseDir, "envs", env)
-		if err := l.cleanEmptyDir(envDir); err != nil {
-			// Non-critical, directory cleanup is best-effort
-		}
+		_ = l.cleanEmptyDir(envDir)
 	}
 
 	return nil
@@ -311,7 +309,7 @@ func (l *LocalStorage) CopyFile(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open source: %w", err)
 	}
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	dstDir := filepath.Dir(dst)
 	if err := l.ensureDir(dstDir); err != nil {
@@ -322,7 +320,7 @@ func (l *LocalStorage) CopyFile(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create destination: %w", err)
 	}
-	defer dstFile.Close()
+	defer func() { _ = dstFile.Close() }()
 
 	_, err = io.Copy(dstFile, srcFile)
 	if err != nil {
@@ -398,9 +396,7 @@ func (l *LocalStorage) DeleteResource(ctx context.Context, path string) error {
 	}
 
 	dir := filepath.Dir(fullPath)
-	if err := l.cleanEmptyDir(dir); err != nil {
-		// Non-critical, directory cleanup is best-effort
-	}
+	_ = l.cleanEmptyDir(dir)
 
 	return nil
 }

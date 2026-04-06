@@ -288,11 +288,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 			continue
 		}
 		content, err := io.ReadAll(rc)
-		if err == nil {
-			_ = rc.Close()
-		} else {
-			rc.Close()
-		}
+		_ = rc.Close()
 		if err != nil {
 			continue
 		}

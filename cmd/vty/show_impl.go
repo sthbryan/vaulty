@@ -255,21 +255,22 @@ func printWithPager(content []byte, secretType string) error {
 	if _, err := exec.LookPath("bat"); err == nil {
 
 		f, err := os.CreateTemp("", "vty-*."+secretType)
-		if err == nil {
-			defer os.Remove(f.Name())
-			if _, err := f.Write(content); err != nil {
-				f.Close()
-				return fmt.Errorf("writing temp file: %w", err)
-			}
-			if err := f.Close(); err != nil {
-				return fmt.Errorf("closing temp file: %w", err)
-			}
-
-			cmd := exec.Command("bat", "--style=header,grid", "--language=env", f.Name())
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			return cmd.Run()
+		if err != nil {
+			return fmt.Errorf("creating temp file: %w", err)
 		}
+		defer func() { _ = os.Remove(f.Name()) }()
+		if _, err := f.Write(content); err != nil {
+			_ = f.Close()
+			return fmt.Errorf("writing temp file: %w", err)
+		}
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("closing temp file: %w", err)
+		}
+
+		cmd := exec.Command("bat", "--style=header,grid", "--language=env", f.Name())
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
 	}
 
 	_, err := os.Stdout.Write(content)

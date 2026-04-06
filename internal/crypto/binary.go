@@ -50,7 +50,7 @@ func DecryptBinary(hexData string, masterKey []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer gzipReader.Close()
+	defer func() { _ = gzipReader.Close() }()
 
 	jsonData, err := io.ReadAll(gzipReader)
 	if err != nil {
@@ -82,7 +82,7 @@ func DecompressHex(hexStr string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer gzipReader.Close()
+	defer func() { _ = gzipReader.Close() }()
 
 	data, err := io.ReadAll(gzipReader)
 	if err != nil {
