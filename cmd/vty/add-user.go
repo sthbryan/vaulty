@@ -59,7 +59,7 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
-	fmt.Println(ui.InfoStyle.Render("🔐 Verifying vault ownership"))
+	logger.Info("Verifying vault ownership")
 	fmt.Println()
 
 	var ownerPassword string
@@ -80,7 +80,7 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Processing..."))
+	logger.Info("Processing...")
 
 	factory := storage.NewFactory(cfg)
 	addUserUseCase := users.NewAddUserUseCase(factory)

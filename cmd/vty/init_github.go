@@ -182,7 +182,7 @@ func runInitGitHub(cfg *config.Config) error {
 	defer cancel()
 
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Initializing vault..."))
+	logger.Info("Initializing vault...")
 
 	environments, err := selectEnvironments()
 	if err != nil {

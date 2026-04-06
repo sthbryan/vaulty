@@ -88,7 +88,7 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Processing..."))
+	logger.Info("Processing...")
 
 	output, err := removeUserUseCase.Execute(ctx, users.RemoveUserInput{
 		Username:      username,

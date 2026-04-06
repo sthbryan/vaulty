@@ -106,7 +106,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Validating credentials..."))
+	logger.Info("Validating credentials...")
 
 	output, err := loginUseCase.Execute(ctx, auth.LoginInput{
 		Username:       username,
@@ -121,7 +121,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("login failed: %w", err)
 	}
 
-	fmt.Println(ui.MutedStyle.Render("Creating session..."))
+	logger.Info("Creating session...")
 
 	if err := loginUseCase.SaveSession(output.Session, cfg, output.Metadata, masterPassword); err != nil {
 		return fmt.Errorf("saving session: %w", err)

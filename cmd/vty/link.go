@@ -150,7 +150,7 @@ func runLinkGitHub(cfg *config.Config) error {
 	defer cancel()
 
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Fetching vault metadata..."))
+	logger.Info("Fetching vault metadata...")
 
 	metadataResp, err := client.GetContent(ctx, owner, repo, ".vaulty/metadata.vty")
 	if err != nil {
@@ -194,7 +194,7 @@ func runLinkGitHub(cfg *config.Config) error {
 
 func runLinkLocal(cfg *config.Config) error {
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Linking to local vault in ~/.vty/vault/..."))
+	logger.Info("Linking to local vault...")
 	fmt.Println()
 
 	cfg.SetLocalMode()

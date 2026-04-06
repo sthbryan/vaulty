@@ -181,7 +181,7 @@ func runInitLocal(cfg *config.Config) error {
 	defer cancel()
 
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Initializing local vault..."))
+	logger.Info("Initializing local vault...")
 
 	output, err := initUseCase.ExecuteLocal(ctx, vault.InitVaultInput{
 		Username:     username,

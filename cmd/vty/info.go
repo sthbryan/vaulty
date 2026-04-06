@@ -65,7 +65,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	fmt.Println()
-	fmt.Println(ui.MutedStyle.Render("Fetching vault contents..."))
+	logger.Info("Fetching vault contents...")
 
 	var secrets []models.SecretInfo
 	var sshKeys []github.SSHKeyInfo
