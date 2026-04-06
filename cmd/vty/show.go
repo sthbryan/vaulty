@@ -5,6 +5,7 @@ import (
 )
 
 var showEnv string
+var showCopy bool
 
 var showCmd = &cobra.Command{
 	Use:   "show",
@@ -71,4 +72,9 @@ func init() {
 	showCmd.AddCommand(showConfigCmd)
 
 	showEnvCmd.Flags().StringVarP(&showEnv, "env", "e", "", "Target environment (optional)")
+
+	showEnvCmd.Flags().BoolVarP(&showCopy, "copy", "c", false, "Copy to clipboard")
+	showSSHCmd.Flags().BoolVarP(&showCopy, "copy", "c", false, "Copy to clipboard")
+	showResourceCmd.Flags().BoolVarP(&showCopy, "copy", "c", false, "Copy to clipboard")
+	showConfigCmd.Flags().BoolVarP(&showCopy, "copy", "c", false, "Copy to clipboard")
 }

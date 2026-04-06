@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/spf13/cobra"
 	"github.com/sthbryan/vaulty/internal/cli"
 	"github.com/sthbryan/vaulty/internal/compress"
@@ -196,7 +197,19 @@ func displayContent(encodedData []byte, masterKey []byte, secretType string) err
 		return fmt.Errorf("decompressing: %w", err)
 	}
 
+	if showCopy {
+		return copyToClipboard(content)
+	}
+
 	return printWithPager(content, secretType)
+}
+
+func copyToClipboard(content []byte) error {
+	if err := clipboard.WriteAll(string(content)); err != nil {
+		return fmt.Errorf("copying to clipboard: %w", err)
+	}
+	logger.Info("Copied to clipboard")
+	return nil
 }
 
 func displaySSHPreview(content []byte, name string) error {
