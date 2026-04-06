@@ -765,15 +765,15 @@ func TestEncryptMasterKeyWithPassword(t *testing.T) {
 		t.Fatalf("EncryptMasterKeyWithPassword() error = %v", err)
 	}
 
-	if encrypted.Salt == nil || len(encrypted.Salt) == 0 {
+	if len(encrypted.Salt) == 0 {
 		t.Error("EncryptMasterKeyWithPassword() salt is empty")
 	}
 
-	if encrypted.IV == nil || len(encrypted.IV) == 0 {
+	if len(encrypted.IV) == 0 {
 		t.Error("EncryptMasterKeyWithPassword() IV is empty")
 	}
 
-	if encrypted.Ciphertext == nil || len(encrypted.Ciphertext) == 0 {
+	if len(encrypted.Ciphertext) == 0 {
 		t.Error("EncryptMasterKeyWithPassword() ciphertext is empty")
 	}
 }
