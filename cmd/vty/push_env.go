@@ -15,14 +15,8 @@ var (
 
 var pushEnvCmd = &cobra.Command{
 	Use:   "env <name> <path>",
-	Short: "Push an environment file to Vaulty",
-	Long: `Compress, encrypt, and upload an environment file to your Vaulty repository.
-
-
-The file will be:
-  1. Compressed using gzip for efficiency
-  2. Encrypted using AES-256-GCM with your password
-  3. Uploaded to your GitHub repository in the envs/ directory
+	Short: "Store environment variables",
+	Long: `Store environment variables in your vault.
 
 Examples:
   vty push env production .env.production
@@ -30,7 +24,6 @@ Examples:
 	Args: cobra.ExactArgs(2),
 	RunE: runPushEnv,
 }
-
 
 func init() {
 	pushCmd.AddCommand(pushEnvCmd)
@@ -80,7 +73,6 @@ func runPushEnv(cmd *cobra.Command, args []string) error {
 	case "":
 		remotePath = fmt.Sprintf("envs/%s.vty", name)
 	case "all":
-
 		confirmed, confirmErr := ui.AskConfirm(fmt.Sprintf("Push %s to all environments?", name), false)
 		if confirmErr != nil {
 			return fmt.Errorf("confirmation failed: %w", confirmErr)

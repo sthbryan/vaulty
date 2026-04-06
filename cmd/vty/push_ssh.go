@@ -10,17 +10,8 @@ import (
 
 var pushSSHCmd = &cobra.Command{
 	Use:   "ssh <name> <path>",
-	Short: "Push an SSH key to Vaulty",
-	Long: `Compress, encrypt, and upload an SSH private key to your Vaulty repository.
-
-
-The file will be:
-  1. Compressed using gzip for efficiency
-  2. Encrypted using AES-256-GCM with your password
-  3. Uploaded to ssh/{username}/{name}.vty in your repository
-
-Only owners and editors can push SSH keys to their own directory.
-Viewers cannot push any secrets.
+	Short: "Store SSH key",
+	Long: `Store SSH key in your vault.
 
 Examples:
   vty push ssh laptop ~/.ssh/id_rsa

@@ -22,36 +22,23 @@ var pushResourceTag string
 
 var pushResourceCmd = &cobra.Command{
 	Use:   "resource <name> <path>",
-	Short: "Push a file or directory to resources",
-	Long: `Compress, encrypt, and upload a file or directory to the resources/ directory.
-
-The file/directory will be:
-  1. Compressed using tar+gzip for efficiency
-  2. Encrypted using AES-256-GCM
-  3. Uploaded to your GitHub repository as .vty file
+	Short: "Store file or directory",
+	Long: `Store file or directory in your vault.
 
 Examples:
   vty push resource zellij ~/.config/zellij --tag dev
-  vty push resource zellij ~/.config/zellij --tag team
-  vty push resource opencode ~/.config/opencode
-  vty push resource vscode-settings ~/Library/Application\ Support/Code/User/settings.json`,
+  vty push resource opencode ~/.config/opencode`,
 	RunE: runPushResource,
 }
 
 var pushConfigCmd = &cobra.Command{
 	Use:   "config <name> <path>",
-	Short: "Push a file or directory to config",
-	Long: `Compress, encrypt, and upload a file or directory to the config/ directory.
-
-The file/directory will be:
-  1. Compressed using tar+gzip for efficiency
-  2. Encrypted using AES-256-GCM
-  3. Uploaded to your GitHub repository as .vty file
+	Short: "Store config file or directory",
+	Long: `Store config file or directory in your vault.
 
 Examples:
   vty push config opencode ~/.config/opencode
-  vty push config zellij ~/.config/zellij --tag team
-  vty push config vscode-settings ~/Library/Application\ Support/Code/User/settings.json`,
+  vty push config zellij ~/.config/zellij --tag team`,
 	RunE: runPushConfig,
 }
 
@@ -134,7 +121,6 @@ func runPushResourceOrConfig(name, path string, secretType models.SecretType, ba
 	fmt.Printf("  Name:      %s\n", name)
 	fmt.Printf("  Type:      %s\n", secretType)
 	fmt.Printf("  Path:      %s\n", remotePath)
-	fmt.Printf("  Encrypted: true\n")
 	fmt.Printf("  Directory: %v\n", isDirectory)
 	fmt.Printf("  Size:      %s → %s\n",
 		ui.FormatBytes(originalSize),
@@ -142,7 +128,7 @@ func runPushResourceOrConfig(name, path string, secretType models.SecretType, ba
 
 	if cfg.IsLocalMode() {
 		fmt.Println()
-		fmt.Println(ui.MutedStyle.Render("  Local storage: ~/.vaulty"))
+		fmt.Println(ui.MutedStyle.Render("  Storage: ~/.vaulty"))
 	}
 
 	return nil

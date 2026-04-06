@@ -6,8 +6,8 @@ import (
 
 var pushCmd = &cobra.Command{
 	Use:   "push",
-	Short: "Push secrets to Vaulty",
-	Long:  `Push environment files or SSH keys to your Vaulty repository.`,
+	Short: "Store secrets in vault",
+	Long:  `Store secrets in your vault.`,
 }
 
 func init() {
