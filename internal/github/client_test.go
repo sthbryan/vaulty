@@ -13,8 +13,8 @@ import (
 
 func TestGetGitHubToken(t *testing.T) {
 	t.Run("returns GITHUB_TOKEN when gh CLI fails", func(t *testing.T) {
-		os.Setenv("GITHUB_TOKEN", "test-token-from-env")
-		defer os.Unsetenv("GITHUB_TOKEN")
+	_ = os.Setenv("GITHUB_TOKEN", "test-token-from-env")
+	defer func() { _ = os.Unsetenv("GITHUB_TOKEN") }()
 
 		token, err := GetGitHubToken()
 		if err != nil {
@@ -137,7 +137,7 @@ func TestClientGetContent(t *testing.T) {
 				t.Errorf("expected Authorization header to be 'Bearer test-token', got '%s'", auth)
 			}
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(content)
+			_ = json.NewEncoder(w).Encode(content)
 		}))
 		defer server.Close()
 
@@ -263,7 +263,7 @@ func TestClientListDirectory(t *testing.T) {
 				t.Errorf("expected GET, got %s", r.Method)
 			}
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(items)
+			_ = json.NewEncoder(w).Encode(items)
 		}))
 		defer server.Close()
 
