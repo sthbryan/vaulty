@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/sthbryan/vaulty/internal/config"
 	"github.com/sthbryan/vaulty/internal/github"
 	"github.com/sthbryan/vaulty/internal/session"
@@ -14,13 +13,21 @@ import (
 	"github.com/sthbryan/vaulty/pkg/models"
 )
 
-func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets []models.SecretInfo, sshKeys []github.SSHKeyInfo, lastSync time.Time, vaultPath string) {
+func renderDetailedVaultInfo(
+	cfg *config.Config,
+	sess *session.Session,
+	secrets []models.SecretInfo,
+	sshKeys []github.SSHKeyInfo,
+	lastSync time.Time,
+	vaultPath string,
+) {
 	fmt.Println()
 	fmt.Println(ui.MutedStyle.Render("User: " + sess.Username + " (" + sess.Role + ")"))
 	fmt.Println()
 
 	if sess.Role == "owner" && cfg.Metadata != nil && len(cfg.Metadata.Users) > 0 {
-		renderUsersTable(cfg.Metadata.Users)
+		lines := buildUserLines(cfg.Metadata.Users)
+		renderPanel("USERS", lines)
 		fmt.Println()
 	}
 
@@ -35,24 +42,24 @@ func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets 
 	}
 	if len(vaultSecrets) > 0 {
 		sort.Slice(vaultSecrets, func(i, j int) bool {
-			if vaultSecrets[i].Environment == vaultSecrets[j].Environment {
-				return vaultSecrets[i].Name < vaultSecrets[j].Name
+			if vaultSecrets[i].Type != vaultSecrets[j].Type {
+				return vaultSecrets[i].Type < vaultSecrets[j].Type
 			}
-			return vaultSecrets[i].Environment < vaultSecrets[j].Environment
+			if vaultSecrets[i].Environment != vaultSecrets[j].Environment {
+				return vaultSecrets[i].Environment < vaultSecrets[j].Environment
+			}
+			return vaultSecrets[i].Name < vaultSecrets[j].Name
 		})
-		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== VAULT ==="))
-		renderSecretsTable(vaultSecrets)
+		lines := buildVaultLines(secrets)
+		renderPanel("VAULT", lines)
 		fmt.Println()
 	}
 
 	if len(sshKeys) > 0 {
-		fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== SSH KEYS ==="))
-		renderSSHKeysTable(sshKeys, sess.Role)
+		lines := buildSSHKeyLines(sshKeys, sess.Role)
+		renderPanel("SSH KEYS", lines)
 		fmt.Println()
 	}
-
-	fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== SUMMARY ==="))
-	fmt.Println()
 
 	secretsLines := []string{
 		fmt.Sprintf("[*] Envs:     %s", ui.HighlightStyle.Render(fmt.Sprintf("%d", countSecretsByType(secrets, models.SecretTypeEnv)))),
@@ -64,9 +71,100 @@ func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets 
 	renderPanel("SECRETS", secretsLines)
 	fmt.Println()
 
-	vaultLines := buildVaultLines(cfg, sess, sshKeys, lastSync, vaultPath)
-	renderPanel("VAULT", vaultLines)
+	vaultInfoLines := buildVaultInfoLines(cfg, sess, sshKeys, lastSync, vaultPath)
+	renderPanel("INFO", vaultInfoLines)
 	fmt.Println()
+}
+
+func buildUserLines(users []config.UserEntry) []string {
+	var lines []string
+	for _, u := range users {
+		lines = append(lines, fmt.Sprintf("%s  %s  %s",
+			ui.HighlightStyle.Render(u.Username),
+			u.Role,
+			formatTime(u.CreatedAt)))
+	}
+	return lines
+}
+
+func buildVaultLines(secrets []models.SecretInfo) []string {
+	var lines []string
+	for _, s := range secrets {
+		envDisplay := "-"
+		if s.Type == models.SecretTypeEnv && s.Environment != "" {
+			envDisplay = envBadge(s.Environment)
+		}
+		lines = append(lines, fmt.Sprintf("%s  %s  %s  %s  %s",
+			s.Name,
+			ui.HighlightStyle.Render(string(s.Type)),
+			envDisplay,
+			formatSize(s.Size),
+			formatTime(s.UpdatedAt)))
+	}
+	return lines
+}
+
+func buildSSHKeyLines(keys []github.SSHKeyInfo, role string) []string {
+	var lines []string
+	if role == "owner" {
+		for _, k := range keys {
+			lines = append(lines, fmt.Sprintf("%s  %s  %s",
+				ui.HighlightStyle.Render(k.Username),
+				k.KeyName,
+				formatSize(int64(k.Size))))
+		}
+	} else {
+		for _, k := range keys {
+			lines = append(lines, fmt.Sprintf("%s  %s",
+				k.KeyName,
+				formatSize(int64(k.Size))))
+		}
+	}
+	return lines
+}
+
+func buildVaultInfoLines(cfg *config.Config, sess *session.Session, sshKeys []github.SSHKeyInfo, lastSync time.Time, vaultPath string) []string {
+	var lines []string
+
+	if sess.Role == "owner" {
+		lines = append(lines, "[@] SSH Breakdown:")
+		userKeyCounts := make(map[string]int)
+		userKeySizes := make(map[string]int64)
+		for _, key := range sshKeys {
+			userKeyCounts[key.Username]++
+			userKeySizes[key.Username] += int64(key.Size)
+		}
+		for username, count := range userKeyCounts {
+			lines = append(lines, fmt.Sprintf("  %s: %s (%s)",
+				ui.HighlightStyle.Render(username),
+				ui.HighlightStyle.Render(fmt.Sprintf("%d keys", count)),
+				ui.HighlightStyle.Render(formatSize(userKeySizes[username]))))
+		}
+	} else {
+		lines = append(lines, fmt.Sprintf("[@] SSH Keys: %s",
+			ui.HighlightStyle.Render(fmt.Sprintf("%d", len(sshKeys)))))
+	}
+
+	if sess.Role == "owner" && cfg.Metadata != nil {
+		ownerCount, editorCount, viewerCount := countUsersByRole(cfg.Metadata.Users)
+		lines = append(lines, fmt.Sprintf("[U] Users: %s total (%d own, %d ed, %d view)",
+			ui.HighlightStyle.Render(fmt.Sprintf("%d", len(cfg.Metadata.Users))),
+			ownerCount, editorCount, viewerCount))
+	}
+
+	if cfg.IsLocalMode() {
+		lines = append(lines, fmt.Sprintf("[L] Vault:   %s", ui.HighlightStyle.Render("local")))
+		lines = append(lines, fmt.Sprintf("[R] Path:    %s", vaultPath))
+	} else {
+		lines = append(lines, fmt.Sprintf("[G] Vault:   %s", ui.HighlightStyle.Render("github")))
+		lines = append(lines, fmt.Sprintf("[R] Repo:    %s", cfg.Repo))
+	}
+
+	lines = append(lines, fmt.Sprintf("[<] Sync:    %s", ui.HighlightStyle.Render(formatTime(lastSync))))
+	lines = append(lines, fmt.Sprintf("[^] Updt:    %s", ui.HighlightStyle.Render(formatTime(cfg.UpdatedAt))))
+	lines = append(lines, fmt.Sprintf("[+] Created: %s", ui.HighlightStyle.Render(formatTime(cfg.CreatedAt))))
+
+	return lines
 }
 
 func countSecretsByType(secrets []models.SecretInfo, secretType models.SecretType) int {
@@ -87,51 +185,6 @@ func sumSecretSizes(secrets []models.SecretInfo) int64 {
 	return total
 }
 
-func buildVaultLines(cfg *config.Config, sess *session.Session, sshKeys []github.SSHKeyInfo, lastSync time.Time, vaultPath string) []string {
-	var lines []string
-
-	if sess.Role == "owner" {
-		lines = append(lines, "[@] SSH Breakdown:")
-		userKeyCounts := make(map[string]int)
-		userKeySizes := make(map[string]int64)
-		for _, key := range sshKeys {
-			userKeyCounts[key.Username]++
-			userKeySizes[key.Username] += int64(key.Size)
-		}
-		for username, count := range userKeyCounts {
-			lines = append(lines, fmt.Sprintf("  %s: %s (%s)",
-				ui.HighlightStyle.Render(username),
-				ui.HighlightStyle.Render(fmt.Sprintf("%d keys", count)),
-				ui.HighlightStyle.Render(formatSize(userKeySizes[username]))))
-		}
-	} else {
-		sshLabel := fmt.Sprintf("[@] SSH Keys: %s", ui.HighlightStyle.Render(fmt.Sprintf("%d", len(sshKeys))))
-		lines = append(lines, sshLabel)
-	}
-
-	if sess.Role == "owner" && cfg.Metadata != nil {
-		ownerCount, editorCount, viewerCount := countUsersByRole(cfg.Metadata.Users)
-		userLabel := fmt.Sprintf("[U] Users: %s total (%d own, %d ed, %d view)",
-			ui.HighlightStyle.Render(fmt.Sprintf("%d", len(cfg.Metadata.Users))),
-			ownerCount, editorCount, viewerCount)
-		lines = append(lines, userLabel)
-	}
-
-	if cfg.IsLocalMode() {
-		lines = append(lines, fmt.Sprintf("[L] Vault:   %s", ui.HighlightStyle.Render("local")))
-		lines = append(lines, fmt.Sprintf("[R] Path:    %s", vaultPath))
-	} else {
-		lines = append(lines, fmt.Sprintf("[G] Vault:   %s", ui.HighlightStyle.Render("github")))
-		lines = append(lines, fmt.Sprintf("[R] Repo:    %s", cfg.Repo))
-	}
-
-	lines = append(lines, fmt.Sprintf("[<] Sync:    %s", ui.HighlightStyle.Render(formatTime(lastSync))))
-	lines = append(lines, fmt.Sprintf("[^] Updt:    %s", ui.HighlightStyle.Render(formatTime(cfg.UpdatedAt))))
-	lines = append(lines, fmt.Sprintf("[+] Created: %s", ui.HighlightStyle.Render(formatTime(cfg.CreatedAt))))
-
-	return lines
-}
-
 func countUsersByRole(users []config.UserEntry) (owners, editors, viewers int) {
 	for _, u := range users {
 		switch u.Role {
@@ -146,26 +199,13 @@ func countUsersByRole(users []config.UserEntry) (owners, editors, viewers int) {
 	return
 }
 
-func renderPanel(title string, lines []string) {
-	maxLen := 0
-	for _, line := range lines {
-		if len(stripANSI(line)) > maxLen {
-			maxLen = len(stripANSI(line))
-		}
+func envBadge(env string) string {
+	switch env {
+	case "shared":
+		return "[*] shared"
+	default:
+		return "[@] " + env
 	}
-
-	totalWidth := maxLen + 4
-
-	titleLen := len(title)
-	totalDashes := totalWidth - titleLen
-	leftDash := 1
-	rightDash := totalDashes - leftDash
-
-	fmt.Printf("┌%s%s%s┐\n", strings.Repeat("─", leftDash), title, strings.Repeat("─", rightDash))
-	for _, line := range lines {
-		fmt.Printf("  %s\n", line)
-	}
-	fmt.Printf("└%s┘\n", strings.Repeat("─", totalWidth))
 }
 
 func formatSize(bytes int64) string {
