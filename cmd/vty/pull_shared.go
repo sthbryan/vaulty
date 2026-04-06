@@ -28,7 +28,6 @@ func pullSecretWithRemotePath(name, remotePath string, sess *session.Session) er
 	}
 
 	s, err := getStorage(cfg)
-	var _ = s
 	if err != nil {
 		return fmt.Errorf("failed to get storage: %w", err)
 	}

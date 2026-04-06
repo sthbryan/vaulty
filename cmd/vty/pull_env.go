@@ -69,7 +69,6 @@ func getRemotePathForEnv(name, envFlag string, cfg *config.Config) (string, erro
 	sharedPath := fmt.Sprintf("envs/%s.vty", name)
 
 	s, err := getStorage(cfg)
-	var _ = s
 	if err != nil {
 		return "", fmt.Errorf("failed to get storage: %w", err)
 	}

@@ -13,7 +13,13 @@ import (
 	"github.com/sthbryan/vaulty/internal/compress"
 	"github.com/sthbryan/vaulty/internal/crypto"
 	"github.com/sthbryan/vaulty/internal/ui"
+	"github.com/sthbryan/vaulty/pkg/models"
 )
+
+type resourceVaultFile struct {
+	Metadata models.ResourceMetadata `json:"metadata"`
+	Data     []byte                  `json:"data"`
+}
 
 var pullResourceTag string
 
@@ -102,7 +108,7 @@ func runPullResourceOrConfig(name, baseDir string) error {
 		return fmt.Errorf("decrypting: %w", err)
 	}
 
-	var vaultFile ResourceVaultFile
+	var vaultFile resourceVaultFile
 	if err := json.Unmarshal(vaultJSON, &vaultFile); err != nil {
 		return fmt.Errorf("parsing vault file: %w", err)
 	}
