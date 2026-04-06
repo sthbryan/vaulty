@@ -113,7 +113,7 @@ func deleteCloudVault(cfg *config.Config, ctx context.Context) error {
 
 	dirsToClean := []string{"envs", "ssh", "resource", "config", ".vaulty"}
 
-	ui.PrintInfo("Deleting vault contents from GitHub...")
+	ui.PrintInfo("Deleting vault contents from Vault...")
 
 	for _, dir := range dirsToClean {
 		items, err := client.ListDirectory(ctx, owner, repoName, dir)

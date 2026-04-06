@@ -14,7 +14,7 @@ var (
 
 var pullCmd = &cobra.Command{
 	Use:   "pull",
-	Short: "Pull and decrypt secrets from GitHub",
+	Short: "Pull and decrypt secrets from Vault",
 	Long: `Pull encrypted secrets from your GitHub repository.
 
 This command downloads, decrypts and saves secrets from your Vaulty repository.
@@ -27,7 +27,7 @@ Examples:
 
 var pullEnvCmd = &cobra.Command{
 	Use:   "env <name>",
-	Short: "Pull environment secrets from GitHub",
+	Short: "Pull environment secrets from Vault",
 	Long: `Download and decrypt environment secrets from the envs/ directory.
 
 Examples:
@@ -39,7 +39,7 @@ Examples:
 
 var pullSSHCmd = &cobra.Command{
 	Use:   "ssh <name>",
-	Short: "Pull SSH key from GitHub",
+	Short: "Pull SSH key from Vault",
 	Long: `Download and decrypt SSH key from the ssh/ directory.
 
 Users can only pull their own SSH keys unless they are the owner.
