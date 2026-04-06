@@ -14,7 +14,6 @@ import (
 	"github.com/sthbryan/vaulty/internal/config"
 	"github.com/sthbryan/vaulty/internal/crypto"
 	"github.com/sthbryan/vaulty/internal/session"
-	"github.com/sthbryan/vaulty/internal/storage"
 	"github.com/sthbryan/vaulty/internal/ui"
 )
 
@@ -29,7 +28,7 @@ func pullSecretWithRemotePath(name, remotePath string, sess *session.Session) er
 	}
 
 	s, err := getStorage(cfg)
-	var _ storage.Storage = s
+	var _ = s
 	if err != nil {
 		return fmt.Errorf("failed to get storage: %w", err)
 	}
@@ -126,7 +125,7 @@ func pullSecretWithSession(name, secretType, targetUser string, sess *session.Se
 	}
 
 	s, err := getStorage(cfg)
-	var _ storage.Storage = s
+	var _ = s
 	if err != nil {
 		return fmt.Errorf("failed to get storage: %w", err)
 	}

@@ -12,7 +12,6 @@ import (
 	"github.com/sthbryan/vaulty/internal/cli"
 	"github.com/sthbryan/vaulty/internal/compress"
 	"github.com/sthbryan/vaulty/internal/crypto"
-	"github.com/sthbryan/vaulty/internal/storage"
 	"github.com/sthbryan/vaulty/internal/ui"
 )
 
@@ -67,7 +66,7 @@ func runPullResourceOrConfig(name, baseDir string) error {
 		return err
 	}
 
-	var _ storage.Storage = s
+	var _ = s
 
 	sess, err := ensureAuthenticated(cfg)
 	if err != nil {

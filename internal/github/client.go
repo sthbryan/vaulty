@@ -70,7 +70,7 @@ func (c *Client) DecodeContent(content *ContentResponse) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to download large file: %w", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		return io.ReadAll(resp.Body)
 	}
 	return nil, fmt.Errorf("unsupported encoding: %s", content.Encoding)
@@ -95,7 +95,7 @@ func (c *Client) RepoExists(ctx context.Context, owner, repo string) (bool, erro
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return resp.StatusCode == http.StatusOK, nil
 }

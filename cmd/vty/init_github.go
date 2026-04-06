@@ -189,9 +189,6 @@ func runInitGitHub(cfg *config.Config) error {
 		return fmt.Errorf("selecting environments: %w", err)
 	}
 
-	if err != nil {
-	}
-
 	output, err := initUseCase.ExecuteGitHub(ctx, vault.InitVaultInput{
 		Username:     ownerUsername,
 		Password:     password1,

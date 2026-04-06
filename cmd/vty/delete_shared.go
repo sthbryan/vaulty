@@ -18,7 +18,7 @@ func runDeleteVault(cmd *cobra.Command, args []string) error {
 	}
 
 	if cfg.Repo == "" && !cfg.IsLocalMode() {
-		return fmt.Errorf("Vaulty not initialized. Run 'vty init' first")
+		return fmt.Errorf("vaulty not initialized. run 'vty init' first")
 	}
 
 	if !cfg.IsOwner() {

@@ -44,7 +44,6 @@ func renderSecretsTable(secrets []models.SecretInfo) {
 			if env == "" {
 				env = "shared"
 			}
-			tag = "-"
 		case models.SecretTypeResource, models.SecretTypeConfig:
 			if env != "" && env != "config" && env != "resources" {
 				tag = env

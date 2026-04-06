@@ -145,16 +145,6 @@ func formatSize(bytes int64) string {
 	}
 }
 
-func calculateTypeSize(secrets []models.SecretInfo, secretType models.SecretType) int64 {
-	var total int64
-	for _, s := range secrets {
-		if s.Type == secretType {
-			total += s.Size
-		}
-	}
-	return total
-}
-
 func formatTime(t time.Time) string {
 	if t.IsZero() {
 		return "never"

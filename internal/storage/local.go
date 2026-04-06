@@ -298,7 +298,9 @@ func (l *LocalStorage) DeleteEnv(ctx context.Context, env, name string) error {
 
 	if env != "" {
 		envDir := filepath.Join(l.baseDir, "envs", env)
-		l.cleanEmptyDir(envDir)
+		if err := l.cleanEmptyDir(envDir); err != nil {
+			// Non-critical, directory cleanup is best-effort
+		}
 	}
 
 	return nil
@@ -396,7 +398,9 @@ func (l *LocalStorage) DeleteResource(ctx context.Context, path string) error {
 	}
 
 	dir := filepath.Dir(fullPath)
-	l.cleanEmptyDir(dir)
+	if err := l.cleanEmptyDir(dir); err != nil {
+		// Non-critical, directory cleanup is best-effort
+	}
 
 	return nil
 }

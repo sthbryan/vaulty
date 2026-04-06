@@ -115,9 +115,8 @@ func (uc *InitVaultUseCase) ExecuteGitHub(ctx context.Context, input InitVaultIn
 		return nil, fmt.Errorf("uploading vault: %w", err)
 	}
 
-	environments := input.Environments
-	if len(environments) == 0 {
-		environments = []string{"production"}
+	if len(input.Environments) == 0 {
+		return nil, fmt.Errorf("at least one environment is required")
 	}
 
 	metadata := &config.Metadata{

@@ -825,11 +825,11 @@ func TestEncryptVaultData(t *testing.T) {
 		t.Fatalf("EncryptVaultData() error = %v", err)
 	}
 
-	if encrypted.IV == nil || len(encrypted.IV) == 0 {
+	if len(encrypted.IV) == 0 {
 		t.Error("EncryptVaultData() IV is empty")
 	}
 
-	if encrypted.Ciphertext == nil || len(encrypted.Ciphertext) == 0 {
+	if len(encrypted.Ciphertext) == 0 {
 		t.Error("EncryptVaultData() ciphertext is empty")
 	}
 }

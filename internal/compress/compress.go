@@ -99,7 +99,11 @@ func DecompressDirectory(data []byte, destPath string) error {
 	if err != nil {
 		return err
 	}
-	defer gr.Close()
+	defer func() {
+		if closeErr := gr.Close(); closeErr != nil {
+			err = fmt.Errorf("closing gzip reader: %w", closeErr)
+		}
+	}()
 
 	tr := tar.NewReader(gr)
 

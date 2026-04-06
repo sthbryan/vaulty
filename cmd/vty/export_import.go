@@ -189,7 +189,9 @@ func runExport(cmd *cobra.Command, args []string) error {
 
 	manifestWriter, err := zw.Create("manifest.json")
 	if err == nil {
-		manifestWriter.Write(manifestJSON)
+		if _, err := manifestWriter.Write(manifestJSON); err != nil {
+			return fmt.Errorf("writing manifest: %w", err)
+		}
 	}
 
 	for _, entry := range entries {
@@ -201,10 +203,14 @@ func runExport(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			continue
 		}
-		w.Write(entry.Content)
+		if _, err := w.Write(entry.Content); err != nil {
+			return fmt.Errorf("writing entry %s: %w", entry.Name, err)
+		}
 	}
 
-	zw.Close()
+	if err := zw.Close(); err != nil {
+		return fmt.Errorf("closing zip writer: %w", err)
+	}
 
 	compressed, err := compress.Compress(buf.Bytes())
 	if err != nil {
@@ -282,13 +288,19 @@ func runImport(cmd *cobra.Command, args []string) error {
 			continue
 		}
 		content, err := io.ReadAll(rc)
-		rc.Close()
+		if err == nil {
+			_ = rc.Close()
+		} else {
+			rc.Close()
+		}
 		if err != nil {
 			continue
 		}
 
 		if f.Name == "manifest.json" {
-			json.Unmarshal(content, &manifest)
+			if err := json.Unmarshal(content, &manifest); err != nil {
+				continue
+			}
 			continue
 		}
 
@@ -322,7 +334,10 @@ func runImport(cmd *cobra.Command, args []string) error {
 
 	fmt.Print("Type 'yes' to confirm: ")
 	var confirm string
-	fmt.Scanln(&confirm)
+	if _, err := fmt.Scanln(&confirm); err != nil {
+		// User didn't provide input, treat as cancellation
+		confirm = ""
+	}
 	if confirm != "yes" {
 		fmt.Println("Import cancelled.")
 		return nil
@@ -345,20 +360,26 @@ func runImport(cmd *cobra.Command, args []string) error {
 		} else {
 			path = fmt.Sprintf("envs/%s", env)
 		}
-		items, _ := client.ListDirectory(ctx, owner, repo, path)
+		items, err := client.ListDirectory(ctx, owner, repo, path)
+		if err != nil {
+			continue
+		}
 		for _, item := range items {
 			if strings.HasSuffix(item.Name, ".vty") {
-				client.DeleteContent(ctx, owner, repo, fmt.Sprintf("%s/%s", path, item.Name), item.Sha)
+				_ = client.DeleteContent(ctx, owner, repo, fmt.Sprintf("%s/%s", path, item.Name), item.Sha)
 			}
 		}
 	}
 
 	wipeDirs := []string{"resources", "config"}
 	for _, dir := range wipeDirs {
-		items, _ := client.ListDirectory(ctx, owner, repo, dir)
+		items, err := client.ListDirectory(ctx, owner, repo, dir)
+		if err != nil {
+			continue
+		}
 		for _, item := range items {
 			if strings.HasSuffix(item.Name, ".vty") {
-				client.DeleteContent(ctx, owner, repo, fmt.Sprintf("%s/%s", dir, item.Name), item.Sha)
+				_ = client.DeleteContent(ctx, owner, repo, fmt.Sprintf("%s/%s", dir, item.Name), item.Sha)
 			}
 		}
 	}

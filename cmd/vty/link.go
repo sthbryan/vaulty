@@ -114,8 +114,7 @@ func runLinkGitHub(cfg *config.Config) error {
 
 		repoFull = ownerInput + "/" + vaultOption
 	} else {
-		var err3 error
-		err3 = huh.NewInput().
+		err3 := huh.NewInput().
 			Title("GitHub Repository").
 			Placeholder(defaultRepo).
 			Value(&repoFull).

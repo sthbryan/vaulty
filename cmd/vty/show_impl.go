@@ -257,8 +257,13 @@ func printWithPager(content []byte, name, secretType string) error {
 		f, err := os.CreateTemp("", "vty-*."+secretType)
 		if err == nil {
 			defer os.Remove(f.Name())
-			f.Write(content)
-			f.Close()
+			if _, err := f.Write(content); err != nil {
+				f.Close()
+				return fmt.Errorf("writing temp file: %w", err)
+			}
+			if err := f.Close(); err != nil {
+				return fmt.Errorf("closing temp file: %w", err)
+			}
 
 			cmd := exec.Command("bat", "--style=header,grid", "--language=env", f.Name())
 			cmd.Stdout = os.Stdout

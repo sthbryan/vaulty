@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 	"github.com/sthbryan/vaulty/internal/config"
-	"github.com/sthbryan/vaulty/internal/storage"
 	"github.com/sthbryan/vaulty/internal/ui"
 )
 
@@ -70,7 +69,7 @@ func getRemotePathForEnv(name, envFlag string, cfg *config.Config) (string, erro
 	sharedPath := fmt.Sprintf("envs/%s.vty", name)
 
 	s, err := getStorage(cfg)
-	var _ storage.Storage = s
+	var _ = s
 	if err != nil {
 		return "", fmt.Errorf("failed to get storage: %w", err)
 	}
