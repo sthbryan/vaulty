@@ -2,18 +2,18 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/DeadBryam/vaulty/internal/compress"
 	"github.com/DeadBryam/vaulty/internal/config"
 	"github.com/DeadBryam/vaulty/internal/crypto"
+	"github.com/DeadBryam/vaulty/internal/models"
 	"github.com/DeadBryam/vaulty/internal/storage"
 	"github.com/DeadBryam/vaulty/internal/ui"
-	"github.com/DeadBryam/vaulty/pkg/models"
 	"github.com/spf13/cobra"
 )
 
@@ -32,10 +32,10 @@ The file/directory will be:
   3. Uploaded to your GitHub repository as .vty file
 
 Examples:
-  vty push resource agents ./AGENTS.md
   vty push resource zellij ~/.config/zellij --tag dev
-  vty push resource config.yml ./config.yml --tag team`,
-	Args: cobra.ExactArgs(2),
+  vty push resource zellij ~/.config/zellij --tag team
+  vty push resource opencode ~/.config/opencode
+  vty push resource vscode-settings ~/Library/Application\ Support/Code/User/settings.json`,
 	RunE: runPushResource,
 }
 
@@ -51,14 +51,9 @@ The file/directory will be:
 
 Examples:
   vty push config opencode ~/.config/opencode
-  vty push config zellij ~/.config/zellij --tag team`,
-	Args: cobra.ExactArgs(2),
+  vty push config zellij ~/.config/zellij --tag team
+  vty push config vscode-settings ~/Library/Application\ Support/Code/User/settings.json`,
 	RunE: runPushConfig,
-}
-
-type ResourceVaultFile struct {
-	Metadata models.ResourceMetadata `json:"metadata"`
-	Data     []byte                  `json:"data"`
 }
 
 func runPushResource(cmd *cobra.Command, args []string) error {
@@ -93,7 +88,12 @@ func runPushResourceOrConfig(name, path string, secretType models.SecretType, ba
 		return err
 	}
 
-	info, err := os.Stat(path)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("failed to resolve path: %w", err)
+	}
+
+	info, err := os.Stat(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("path not found: %s", path)
@@ -103,7 +103,7 @@ func runPushResourceOrConfig(name, path string, secretType models.SecretType, ba
 
 	isDirectory := info.IsDir()
 
-	vaultFile, originalSize, err := prepareResourceFile(path, name, secretType, isDirectory)
+	vaultFile, originalSize, err := prepareResourceFile(absPath, name, secretType, isDirectory)
 	if err != nil {
 		return err
 	}
@@ -127,17 +127,13 @@ func runPushResourceOrConfig(name, path string, secretType models.SecretType, ba
 	fmt.Printf("  Path:      %s\n", remotePath)
 	fmt.Printf("  Encrypted: true\n")
 	fmt.Printf("  Directory: %v\n", isDirectory)
-	if pushResourceTag != "" {
-		fmt.Printf("  Tag:       %s\n", pushResourceTag)
-	}
 	fmt.Printf("  Size:      %s → %s\n",
 		ui.FormatBytes(originalSize),
 		ui.FormatBytes(int64(encryptedSize)))
 
 	if cfg.IsLocalMode() {
-		fmt.Printf("  Storage:   Local (%s)\n", cfg.LocalVaultPath)
-	} else {
-		fmt.Printf("  Repo:      %s\n", cfg.Repo)
+		fmt.Println()
+		fmt.Println(ui.MutedStyle.Render("  Local storage: ~/.vaulty"))
 	}
 
 	return nil
@@ -146,34 +142,41 @@ func runPushResourceOrConfig(name, path string, secretType models.SecretType, ba
 func prepareResourceFile(path, name string, secretType models.SecretType, isDirectory bool) (*ResourceVaultFile, int64, error) {
 	ui.PrintInfo("Reading path: %s", path)
 
-	var content []byte
+	var originalData []byte
 	var originalSize int64
 
 	if isDirectory {
 		ui.PrintInfo("Compressing directory...")
-		compressed, err := compress.CompressDirectory(path)
+		tarData, err := compress.CompressDirectory(path)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to compress directory: %w", err)
 		}
-		content = compressed
-		originalSize = int64(len(compressed))
+		originalData = tarData
+		originalSize = int64(len(tarData))
 	} else {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to read file: %w", err)
 		}
-		content = data
+		originalData = data
 		originalSize = int64(len(data))
 	}
 
 	ui.PrintStats("Original size: %s", ui.FormatBytes(originalSize))
 
-	compressedSize := int64(len(content))
+	ui.PrintInfo("Compressing...")
+	compressed, err := compress.Compress(originalData)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to compress: %w", err)
+	}
+
+	compressedSize := int64(len(compressed))
 	ui.PrintStats("Compressed size: %s (%.1f%% reduction)",
 		ui.FormatBytes(compressedSize),
+		ui.FormatBytes(originalSize),
 		float64(originalSize-compressedSize)/float64(originalSize)*100)
 
-	hash := sha256.Sum256(content)
+	hash := sha256.Sum256(originalData)
 	checksum := fmt.Sprintf("%x", hash)
 
 	vaultFile := &ResourceVaultFile{
@@ -188,7 +191,7 @@ func prepareResourceFile(path, name string, secretType models.SecretType, isDire
 			Size:        originalSize,
 			Checksum:    checksum,
 		},
-		Data: content,
+		Data: compressed,
 	}
 
 	return vaultFile, originalSize, nil
@@ -223,44 +226,39 @@ func uploadResourceToStorage(s storage.Storage, remotePath string, vaultData []b
 		ui.PrintCloud("Checking remote: %s/%s", s.GetRepo(), remotePath)
 	}
 
-	if !cfg.IsLocalMode() {
-		_, err := s.GetResource(ctx, remotePath)
-		if err == nil {
-			if !pushForce {
-				ui.PrintWarning("File already exists on remote")
-				confirmed, confirmErr := ui.AskConfirm("Overwrite existing file?", false)
-				if confirmErr != nil {
-					return fmt.Errorf("confirmation failed: %w", confirmErr)
-				}
-				if !confirmed {
-					ui.PrintInfo("Push cancelled")
-					return nil
-				}
-			}
-			ui.PrintInfo("Will overwrite existing file")
-		}
-	}
-
-	if cfg.IsLocalMode() {
-		ui.PrintCloud("Saving to local storage...")
-	} else {
-		ui.PrintCloud("Uploading to GitHub...")
-	}
-
-	if err := s.PutResource(ctx, remotePath, vaultData); err != nil {
+	err := s.PutResource(ctx, remotePath, vaultData)
+	if err != nil {
 		return fmt.Errorf("failed to upload: %w", err)
+	}
+
+	if !cfg.IsLocalMode() {
+		ui.PrintSuccess("Uploaded to GitHub")
 	}
 
 	return nil
 }
 
-func init() {
-	pushResourceCmd.Flags().StringVarP(&pushResourceTag, "tag", "t", "", "Tag for organizing resources (e.g., dev, team)")
-	pushResourceCmd.Flags().BoolVarP(&pushForce, "force", "f", false, "Overwrite without prompting")
+func validateFile(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("file not found: %s", path)
+		}
+		return fmt.Errorf("cannot access file: %w", err)
+	}
 
-	pushConfigCmd.Flags().StringVarP(&pushResourceTag, "tag", "t", "", "Tag for organizing configs (e.g., dev, team)")
-	pushConfigCmd.Flags().BoolVarP(&pushForce, "force", "f", false, "Overwrite without prompting")
+	if info.IsDir() {
+		return fmt.Errorf("expected a file, got directory: %s", path)
+	}
 
-	pushCmd.AddCommand(pushResourceCmd)
-	pushCmd.AddCommand(pushConfigCmd)
+	return nil
 }
+
+func getPlatform() string {
+	if runtime.GOOS == "darwin" {
+		return "macOS"
+	}
+	return runtime.GOOS
+}
+
+const maxConcurrentPull = 5
