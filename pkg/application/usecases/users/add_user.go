@@ -17,9 +17,7 @@ type AddUserInput struct {
 	OwnerPassword string
 }
 
-type AddUserOutput struct {
-	RecoverySeed string
-}
+type AddUserOutput struct {}
 
 type AddUserUseCase struct {
 	storageFactory *storage.Factory
@@ -123,11 +121,6 @@ func (uc *AddUserUseCase) Execute(ctx context.Context, input AddUserInput) (*Add
 		return nil, fmt.Errorf("compressing master key: %w", err)
 	}
 
-	recoverySeeds, err := crypto.GenerateRecoverySeed()
-	if err != nil {
-		return nil, fmt.Errorf("generating recovery seed: %w", err)
-	}
-
 	metadata.Users = append(metadata.Users, config.UserEntry{
 		Username:          input.Username,
 		Role:              input.Role,
@@ -145,32 +138,10 @@ func (uc *AddUserUseCase) Execute(ctx context.Context, input AddUserInput) (*Add
 		return nil, fmt.Errorf("uploading key: %w", err)
 	}
 
-	encryptedSeed, err := crypto.EncryptRecoverySeed(recoverySeeds, input.OwnerPassword)
-	if err != nil {
-		return nil, fmt.Errorf("encrypting recovery seed: %w", err)
-	}
-
-	encryptedSeedJSON, err := json.Marshal(encryptedSeed)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling encrypted seed: %w", err)
-	}
-
-	recoveryHex, err := crypto.CompressHex(encryptedSeedJSON)
-	if err != nil {
-		return nil, fmt.Errorf("compressing recovery: %w", err)
-	}
-
-	err = s.PutRecoverySeed(ctx, input.Username, []byte(recoveryHex))
-	if err != nil {
-		return nil, fmt.Errorf("uploading recovery seed: %w", err)
-	}
-
 	err = s.PutMetadata(ctx, metadataJSON)
 	if err != nil {
 		return nil, fmt.Errorf("uploading metadata: %w", err)
 	}
 
-	return &AddUserOutput{
-		RecoverySeed: recoverySeeds,
-	}, nil
+	return &AddUserOutput{}, nil
 }

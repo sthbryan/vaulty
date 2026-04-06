@@ -18,7 +18,6 @@ var initCmd = &cobra.Command{
 This command will guide you through:
   • Setting up a secure master password
   • Choosing storage mode (GitHub or local)
-  • Creating a recovery seed phrase
 
 Use --local for local-only storage without GitHub.`,
 	RunE: runInit,

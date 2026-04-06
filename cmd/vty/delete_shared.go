@@ -32,7 +32,7 @@ func runDeleteVault(cmd *cobra.Command, args []string) error {
 	ui.PrintWarning("This will permanently remove:")
 	ui.PrintInfo("  - All environment secrets (shared and all environments)")
 	ui.PrintInfo("  - All SSH keys")
-	ui.PrintInfo("  - All user keys and recovery files")
+	ui.PrintInfo("  - All user keys")
 	ui.PrintInfo("  - Vault metadata")
 	ui.PrintInfo("")
 	ui.PrintWarning("This action CANNOT be undone!")

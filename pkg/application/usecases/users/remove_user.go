@@ -366,15 +366,6 @@ func (uc *RemoveUserUseCase) Execute(ctx context.Context, input RemoveUserInput)
 		}
 	}
 
-	recoveryPath := fmt.Sprintf(".vaulty/recovery/%s.recovery.vty", input.Username)
-	recoveryResp, err := s.GetContent(ctx, recoveryPath)
-	if err == nil && recoveryResp != nil {
-		err = s.DeleteContent(ctx, recoveryPath, recoveryResp.Sha)
-		if err != nil {
-			return nil, fmt.Errorf("failed to delete recovery file: %w", err)
-		}
-	}
-
 	sshDirPath := fmt.Sprintf("ssh/%s", input.Username)
 	sshItems, err := s.ListDirectory(ctx, sshDirPath)
 	if err == nil {

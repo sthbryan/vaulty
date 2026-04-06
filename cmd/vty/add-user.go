@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/DeadBryam/vaulty/internal/config"
@@ -89,11 +88,13 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 	defer cancel()
 
+	var _ *struct{}
 	output, err := addUserUseCase.Execute(ctx, users.AddUserInput{
 		Username:      username,
 		Role:          role,
 		OwnerPassword: ownerPassword,
 	})
+	_ = output
 	if err != nil {
 		fmt.Println()
 		fmt.Println(ui.ErrorStyle.Render("❌ Failed to add user"))
@@ -105,43 +106,6 @@ func runAddUser(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	fmt.Println(ui.SuccessStyle.Render("✅ User created successfully!"))
-	fmt.Println()
-	fmt.Println(ui.WarningStyle.Render("⚠️  Recovery seed for new user:"))
-	fmt.Println()
-	fmt.Println(ui.TitleStyle.Render(output.RecoverySeed))
-	fmt.Println()
-
-	saveToFile, err := ui.AskConfirm("Save recovery seed to a file?", true)
-	if err != nil {
-		return fmt.Errorf("confirmation failed: %w", err)
-	}
-
-	if saveToFile {
-		defaultPath := fmt.Sprintf("vaulty-recovery-%s.txt", username)
-		var filePath string
-
-		err = huh.NewInput().
-			Title("File path").
-			Placeholder(defaultPath).
-			Value(&filePath).
-			Run()
-		if err != nil {
-			return fmt.Errorf("form cancelled")
-		}
-
-		if filePath == "" {
-			filePath = defaultPath
-		}
-
-		if err := os.WriteFile(filePath, []byte(output.RecoverySeed), 0600); err != nil {
-			return fmt.Errorf("saving seed file: %w", err)
-		}
-
-		fmt.Println()
-		fmt.Println(ui.SuccessStyle.Render(fmt.Sprintf("✅ Recovery seed saved to: %s", filePath)))
-		fmt.Println(ui.MutedStyle.Render("Share this file securely with the new user."))
-	}
-
 	fmt.Println()
 	fmt.Println(ui.InfoStyle.Render(fmt.Sprintf("Username: %s", username)))
 	fmt.Println(ui.InfoStyle.Render(fmt.Sprintf("Role: %s", role)))

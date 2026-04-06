@@ -75,7 +75,7 @@ func runRemoveUser(cmd *cobra.Command, args []string) error {
 
 	currentPassword, err := pwd.Get()
 	if err != nil {
-		return fmt.Errorf("password not found, run 'vty init' or 'vty recover'")
+		return fmt.Errorf("password not found, run 'vty init")
 	}
 
 	verifyPassword, err := ui.AskPassword("Verify your password")

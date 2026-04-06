@@ -77,30 +77,3 @@ func TestMultiUserVaultFlow(t *testing.T) {
 	}
 }
 
-func TestEncryptDecryptRecoverySeed(t *testing.T) {
-	password := "test-password"
-	seedPhrase := "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12"
-
-	encryptedSeed, err := EncryptRecoverySeed(seedPhrase, password)
-	if err != nil {
-		t.Fatalf("EncryptRecoverySeed failed: %v", err)
-	}
-
-	if encryptedSeed == nil {
-		t.Fatal("EncryptRecoverySeed returned nil")
-	}
-
-	decryptedSeed, err := DecryptRecoverySeed(encryptedSeed, password)
-	if err != nil {
-		t.Fatalf("DecryptRecoverySeed failed: %v", err)
-	}
-
-	if decryptedSeed != seedPhrase {
-		t.Errorf("Decrypted seed = %s, want %s", decryptedSeed, seedPhrase)
-	}
-
-	_, err = DecryptRecoverySeed(encryptedSeed, "wrong-password")
-	if err == nil {
-		t.Error("Expected error with wrong password")
-	}
-}

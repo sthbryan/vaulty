@@ -15,17 +15,15 @@ import (
 )
 
 type InitVaultInput struct {
-	Username      string
-	Password      string
-	Environments  []string
-	RecoverySeed  string
-	IsLocalMode   bool
+	Username     string
+	Password     string
+	Environments []string
+	IsLocalMode  bool
 }
 
 type InitVaultOutput struct {
-	Session      *session.Session
-	Metadata     *config.Metadata
-	RecoverySeed string
+	Session  *session.Session
+	Metadata *config.Metadata
 }
 
 type InitVaultUseCase struct {
@@ -152,41 +150,11 @@ func (uc *InitVaultUseCase) ExecuteGitHub(ctx context.Context, input InitVaultIn
 		return nil, fmt.Errorf("uploading metadata: %w", err)
 	}
 
-	seedPhrase := input.RecoverySeed
-	if seedPhrase == "" {
-		seedPhrase, err = crypto.GenerateRecoverySeed()
-		if err != nil {
-			return nil, fmt.Errorf("generating recovery seed: %w", err)
-		}
-	}
-
-	encryptedSeed, err := crypto.EncryptRecoverySeed(seedPhrase, input.Password)
-	if err != nil {
-		return nil, fmt.Errorf("encrypting recovery seed: %w", err)
-	}
-
-	encryptedSeedJSON, err := json.Marshal(encryptedSeed)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling encrypted seed: %w", err)
-	}
-
-	recoveryHex, err := crypto.CompressHex(encryptedSeedJSON)
-	if err != nil {
-		return nil, fmt.Errorf("compressing recovery: %w", err)
-	}
-
-	recoveryContent := base64.StdEncoding.EncodeToString([]byte(recoveryHex))
-	err = s.PutContent(ctx, ".vaulty/recovery/"+input.Username+".recovery.vty", recoveryContent)
-	if err != nil {
-		return nil, fmt.Errorf("uploading recovery seed: %w", err)
-	}
-
 	sess := session.NewSession(input.Username, "owner", masterKey, []byte{})
 
 	return &InitVaultOutput{
-		Session:      sess,
-		Metadata:     metadata,
-		RecoverySeed: seedPhrase,
+		Session:  sess,
+		Metadata: metadata,
 	}, nil
 }
 
@@ -275,39 +243,10 @@ func (uc *InitVaultUseCase) ExecuteLocal(ctx context.Context, input InitVaultInp
 		return nil, fmt.Errorf("saving metadata: %w", err)
 	}
 
-	seedPhrase := input.RecoverySeed
-	if seedPhrase == "" {
-		seedPhrase, err = crypto.GenerateRecoverySeed()
-		if err != nil {
-			return nil, fmt.Errorf("generating recovery seed: %w", err)
-		}
-	}
-
-	encryptedSeed, err := crypto.EncryptRecoverySeed(seedPhrase, input.Password)
-	if err != nil {
-		return nil, fmt.Errorf("encrypting recovery seed: %w", err)
-	}
-
-	encryptedSeedJSON, err := json.Marshal(encryptedSeed)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling encrypted seed: %w", err)
-	}
-
-	recoveryHex, err := crypto.CompressHex(encryptedSeedJSON)
-	if err != nil {
-		return nil, fmt.Errorf("compressing recovery: %w", err)
-	}
-
-	err = s.PutRecoverySeed(ctx, input.Username, []byte(recoveryHex))
-	if err != nil {
-		return nil, fmt.Errorf("saving recovery seed: %w", err)
-	}
-
 	sess := session.NewSession(input.Username, "owner", masterKey, []byte{})
 
 	return &InitVaultOutput{
-		Session:      sess,
-		Metadata:     metadata,
-		RecoverySeed: seedPhrase,
+		Session:  sess,
+		Metadata: metadata,
 	}, nil
 }

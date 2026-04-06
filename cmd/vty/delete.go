@@ -66,7 +66,7 @@ var deleteVaultCmd = &cobra.Command{
 This is a DESTRUCTIVE operation that will:
   - Delete all environment secrets
   - Delete all SSH keys
-  - Delete all user keys and recovery files
+  - Delete all user keys
   - Delete metadata
 
 This action CANNOT be undone. Only the vault owner can perform this action.`,

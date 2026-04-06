@@ -43,27 +43,6 @@ func (l *LocalUserStorage) PutUserKeys(ctx context.Context, username string, dat
 	return os.WriteFile(path, data, 0600)
 }
 
-func (l *LocalUserStorage) GetRecoverySeed(ctx context.Context, username string) ([]byte, error) {
-	path := filepath.Join(l.baseDir, "recovery", fmt.Sprintf("%s.recovery.vty", username))
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("recovery seed not found for %s", username)
-		}
-		return nil, fmt.Errorf("failed to read recovery seed: %w", err)
-	}
-	return data, nil
-}
-
-func (l *LocalUserStorage) PutRecoverySeed(ctx context.Context, username string, data []byte) error {
-	recoveryDir := filepath.Join(l.baseDir, "recovery")
-	if err := os.MkdirAll(recoveryDir, 0700); err != nil {
-		return fmt.Errorf("failed to create recovery directory: %w", err)
-	}
-	path := filepath.Join(recoveryDir, fmt.Sprintf("%s.recovery.vty", username))
-	return os.WriteFile(path, data, 0600)
-}
-
 func (l *LocalUserStorage) GetUserList(ctx context.Context) ([]byte, error) {
 	return nil, fmt.Errorf("GetUserList not implemented")
 }

@@ -69,19 +69,6 @@ func (g *GitHubStorage) PutUserKeys(ctx context.Context, username string, data [
 	return g.client.PutUserKeys(ctx, g.owner, g.repo, username, data)
 }
 
-func (g *GitHubStorage) GetRecoverySeed(ctx context.Context, username string) ([]byte, error) {
-	content, err := g.client.GetRecoverySeed(ctx, g.owner, g.repo, username)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get recovery seed: %w", err)
-	}
-
-	return g.client.DecodeContent(content)
-}
-
-func (g *GitHubStorage) PutRecoverySeed(ctx context.Context, username string, data []byte) error {
-	return g.client.PutRecoverySeed(ctx, g.owner, g.repo, username, data)
-}
-
 func (g *GitHubStorage) ListSSHKeys(ctx context.Context, username string) ([]SSHKeyInfo, error) {
 	keys, err := g.client.ListSSHKeys(ctx, g.owner, g.repo, username)
 	if err != nil {
@@ -313,15 +300,6 @@ func (g *GitHubStorage) ListMetadata(ctx context.Context) ([]string, error) {
 		for _, key := range keys {
 			if key.Type != "dir" && strings.HasSuffix(key.Name, ".vty") {
 				files = append(files, "keys/"+key.Name)
-			}
-		}
-	}
-
-	recovery, err := g.client.ListDirectory(ctx, g.owner, g.repo, ".vaulty/recovery")
-	if err == nil {
-		for _, file := range recovery {
-			if file.Type != "dir" && strings.HasSuffix(file.Name, ".vty") {
-				files = append(files, "recovery/"+file.Name)
 			}
 		}
 	}

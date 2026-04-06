@@ -61,7 +61,6 @@ func init() {
 	addUserCmd.GroupID = "team"
 	removeUserCmd.GroupID = "team"
 	transferOwnerCmd.GroupID = "team"
-	recoverCmd.GroupID = "team"
 }
 
 func main() {

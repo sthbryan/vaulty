@@ -100,28 +100,6 @@ func (l *LocalStorage) PutUserKeys(ctx context.Context, username string, data []
 	return os.WriteFile(path, data, 0600)
 }
 
-func (l *LocalStorage) GetRecoverySeed(ctx context.Context, username string) ([]byte, error) {
-	path := filepath.Join(l.baseDir, "recovery", fmt.Sprintf("%s.recovery.vty", username))
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("recovery seed not found for %s", username)
-		}
-		return nil, fmt.Errorf("failed to read recovery seed: %w", err)
-	}
-	return data, nil
-}
-
-func (l *LocalStorage) PutRecoverySeed(ctx context.Context, username string, data []byte) error {
-	recoveryDir := filepath.Join(l.baseDir, "recovery")
-	if err := l.ensureDir(recoveryDir); err != nil {
-		return fmt.Errorf("failed to create recovery directory: %w", err)
-	}
-
-	path := filepath.Join(recoveryDir, fmt.Sprintf("%s.recovery.vty", username))
-	return os.WriteFile(path, data, 0600)
-}
-
 func (l *LocalStorage) ListSSHKeys(ctx context.Context, username string) ([]SSHKeyInfo, error) {
 	sshDir := filepath.Join(l.baseDir, "ssh", username)
 
@@ -473,16 +451,6 @@ func (l *LocalStorage) ListMetadata(ctx context.Context) ([]string, error) {
 		for _, entry := range entries {
 			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".vty" {
 				files = append(files, filepath.Join("keys", entry.Name()))
-			}
-		}
-	}
-
-	recoveryDir := filepath.Join(l.baseDir, "recovery")
-	entries, err = os.ReadDir(recoveryDir)
-	if err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".vty" {
-				files = append(files, filepath.Join("recovery", entry.Name()))
 			}
 		}
 	}

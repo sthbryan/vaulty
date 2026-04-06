@@ -34,18 +34,6 @@ func (g *GitHubUserStorage) PutUserKeys(ctx context.Context, username string, da
 	return g.client.PutUserKeys(ctx, g.owner, g.repo, username, data)
 }
 
-func (g *GitHubUserStorage) GetRecoverySeed(ctx context.Context, username string) ([]byte, error) {
-	content, err := g.client.GetRecoverySeed(ctx, g.owner, g.repo, username)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get recovery seed: %w", err)
-	}
-	return g.client.DecodeContent(content)
-}
-
-func (g *GitHubUserStorage) PutRecoverySeed(ctx context.Context, username string, data []byte) error {
-	return g.client.PutRecoverySeed(ctx, g.owner, g.repo, username, data)
-}
-
 func (g *GitHubUserStorage) GetUserList(ctx context.Context) ([]byte, error) {
 	return nil, fmt.Errorf("GetUserList not implemented")
 }

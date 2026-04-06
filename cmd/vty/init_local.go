@@ -3,12 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/DeadBryam/vaulty/internal/config"
-	"github.com/DeadBryam/vaulty/internal/crypto"
 	"github.com/DeadBryam/vaulty/internal/password"
 	"github.com/DeadBryam/vaulty/internal/session"
 	"github.com/DeadBryam/vaulty/internal/storage"
@@ -185,17 +183,13 @@ func runInitLocal(cfg *config.Config) error {
 	fmt.Println()
 	fmt.Println(ui.MutedStyle.Render("Initializing local vault..."))
 
-	seedPhrase, err := crypto.GenerateRecoverySeed()
 	if err != nil {
-		return fmt.Errorf("generating recovery seed: %w", err)
 	}
 
 	output, err := initUseCase.ExecuteLocal(ctx, vault.InitVaultInput{
 		Username:     username,
 		Password:     password1,
 		Environments: environments,
-		RecoverySeed: seedPhrase,
-		IsLocalMode:  true,
 	})
 	if err != nil {
 		return fmt.Errorf("initializing vault: %w", err)
@@ -218,46 +212,6 @@ func runInitLocal(cfg *config.Config) error {
 	fmt.Println()
 	fmt.Println(ui.SuccessStyle.Render("✅ Local vault initialized successfully!"))
 	fmt.Println()
-	fmt.Println(ui.WarningStyle.Render("⚠️  IMPORTANT: Save your recovery seed phrase"))
-	fmt.Println()
-	fmt.Println(ui.InfoStyle.Render("Recovery seed phrase:"))
-	fmt.Println(ui.WarningStyle.Render(output.RecoverySeed))
-	fmt.Println()
-
-	saveToFile, err := ui.AskConfirm("Save seed phrase to a file?", true)
-	if err != nil {
-		return fmt.Errorf("confirmation failed: %w", err)
-	}
-
-	if saveToFile {
-		var filePath string
-		err = huh.NewInput().
-			Title("File path").
-			Placeholder("vaulty-recovery-seed.txt").
-			Value(&filePath).
-			Run()
-		if err != nil {
-			return fmt.Errorf("form cancelled")
-		}
-
-		if filePath == "" {
-			filePath = "vaulty-recovery-seed.txt"
-		}
-
-		err = os.WriteFile(filePath, []byte(output.RecoverySeed), 0600)
-		if err != nil {
-			return fmt.Errorf("saving seed file: %w", err)
-		}
-
-		fmt.Println()
-		fmt.Println(ui.SuccessStyle.Render(fmt.Sprintf("✅ Seed phrase saved to: %s", filePath)))
-		fmt.Println(ui.MutedStyle.Render("Store this file in a secure location (e.g., password manager)."))
-	} else {
-		fmt.Println()
-		fmt.Println(ui.MutedStyle.Render("Write this down and store it securely. You will need it to recover"))
-		fmt.Println(ui.MutedStyle.Render("your vault if you forget your master password."))
-	}
-
 	fmt.Println()
 	fmt.Println(ui.InfoStyle.Render(fmt.Sprintf("Username: %s", username)))
 	fmt.Println(ui.InfoStyle.Render("Role: owner"))
