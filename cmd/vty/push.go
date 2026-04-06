@@ -56,6 +56,8 @@ func init() {
 	rootCmd.AddCommand(pushCmd)
 	pushCmd.AddCommand(pushEnvCmd)
 	pushCmd.AddCommand(pushSSHCmd)
+	pushCmd.AddCommand(pushResourceCmd)
+	pushCmd.AddCommand(pushConfigCmd)
 
 	pushEnvCmd.Flags().BoolVarP(&pushForce, "force", "f", false, "Overwrite without prompting")
 	pushEnvCmd.Flags().StringVarP(&pushEnv, "env", "e", "", "Target environment (optional: production, staging, development)")
