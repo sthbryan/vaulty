@@ -146,7 +146,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		return secrets[i].Type < secrets[j].Type
 	})
 
-	renderDetailedVaultInfo(cfg, sess, secrets, sshKeys, cfg.UpdatedAt)
+	renderDetailedVaultInfo(cfg, sess, secrets, sshKeys, cfg.UpdatedAt, cfg.LocalVaultPath)
 	return nil
 }
 

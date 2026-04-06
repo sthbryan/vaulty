@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -13,9 +14,8 @@ import (
 	"github.com/sthbryan/vaulty/pkg/models"
 )
 
-func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets []models.SecretInfo, sshKeys []github.SSHKeyInfo, lastSync time.Time) {
+func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets []models.SecretInfo, sshKeys []github.SSHKeyInfo, lastSync time.Time, vaultPath string) {
 	fmt.Println()
-
 	fmt.Println(ui.MutedStyle.Render("User: " + sess.Username + " (" + sess.Role + ")"))
 	fmt.Println()
 
@@ -51,37 +51,47 @@ func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets 
 		fmt.Println()
 	}
 
-	totalSize := int64(0)
-	envCount := 0
-	resourceCount := 0
-	configCount := 0
-	sshCount := len(sshKeys)
-	for _, s := range secrets {
-		totalSize += s.Size
-		switch s.Type {
-		case models.SecretTypeEnv:
-			envCount++
-		case models.SecretTypeResource:
-			resourceCount++
-		case models.SecretTypeConfig:
-			configCount++
-		}
-	}
-
 	fmt.Println(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.Primary)).Render("=== SUMMARY ==="))
 	fmt.Println()
 
-	fmt.Printf("  Total Secrets: %s (%s env + %s resource + %s config + %s ssh)\n",
-		ui.HighlightStyle.Render(fmt.Sprintf("%d", len(secrets))),
-		ui.HighlightStyle.Render(fmt.Sprintf("%d", envCount)),
-		ui.HighlightStyle.Render(fmt.Sprintf("%d", resourceCount)),
-		ui.HighlightStyle.Render(fmt.Sprintf("%d", configCount)),
-		ui.HighlightStyle.Render(fmt.Sprintf("%d", sshCount)))
-	fmt.Printf("  Total Size:    %s\n", ui.HighlightStyle.Render(formatSize(totalSize)))
+	secretsLines := []string{
+		fmt.Sprintf("[*] Envs:     %s", ui.HighlightStyle.Render(fmt.Sprintf("%d", countSecretsByType(secrets, models.SecretTypeEnv)))),
+		fmt.Sprintf("[>] Res:      %s", ui.HighlightStyle.Render(fmt.Sprintf("%d", countSecretsByType(secrets, models.SecretTypeResource)))),
+		fmt.Sprintf("[~] Cfg:      %s", ui.HighlightStyle.Render(fmt.Sprintf("%d", countSecretsByType(secrets, models.SecretTypeConfig)))),
+		fmt.Sprintf("[@] SSH Keys: %s", ui.HighlightStyle.Render(fmt.Sprintf("%d", len(sshKeys)))),
+		fmt.Sprintf("[=] Size:     %s", ui.HighlightStyle.Render(formatSize(sumSecretSizes(secrets)))),
+	}
+	renderPanel("SECRETS", secretsLines)
 	fmt.Println()
 
+	vaultLines := buildVaultLines(cfg, sess, sshKeys, lastSync, vaultPath)
+	renderPanel("VAULT", vaultLines)
+	fmt.Println()
+}
+
+func countSecretsByType(secrets []models.SecretInfo, secretType models.SecretType) int {
+	count := 0
+	for _, s := range secrets {
+		if s.Type == secretType {
+			count++
+		}
+	}
+	return count
+}
+
+func sumSecretSizes(secrets []models.SecretInfo) int64 {
+	var total int64
+	for _, s := range secrets {
+		total += s.Size
+	}
+	return total
+}
+
+func buildVaultLines(cfg *config.Config, sess *session.Session, sshKeys []github.SSHKeyInfo, lastSync time.Time, vaultPath string) []string {
+	var lines []string
+
 	if sess.Role == "owner" {
-		fmt.Println("  SSH Breakdown:")
+		lines = append(lines, "[@] SSH Breakdown:")
 		userKeyCounts := make(map[string]int)
 		userKeySizes := make(map[string]int64)
 		for _, key := range sshKeys {
@@ -89,52 +99,79 @@ func renderDetailedVaultInfo(cfg *config.Config, sess *session.Session, secrets 
 			userKeySizes[key.Username] += int64(key.Size)
 		}
 		for username, count := range userKeyCounts {
-			fmt.Printf("    %s: %s (%s)\n",
+			lines = append(lines, fmt.Sprintf("  %s: %s (%s)",
 				ui.HighlightStyle.Render(username),
 				ui.HighlightStyle.Render(fmt.Sprintf("%d keys", count)),
-				ui.HighlightStyle.Render(formatSize(userKeySizes[username])))
+				ui.HighlightStyle.Render(formatSize(userKeySizes[username]))))
 		}
-		fmt.Println()
 	} else {
-		fmt.Printf("  My SSH Keys:   %s\n", ui.HighlightStyle.Render(fmt.Sprintf("%d", sshCount)))
-		fmt.Println()
+		sshLabel := fmt.Sprintf("[@] SSH Keys: %s", ui.HighlightStyle.Render(fmt.Sprintf("%d", len(sshKeys))))
+		lines = append(lines, sshLabel)
 	}
 
 	if sess.Role == "owner" && cfg.Metadata != nil {
-		ownerCount := 0
-		editorCount := 0
-		viewerCount := 0
-		for _, u := range cfg.Metadata.Users {
-			switch u.Role {
-			case "owner":
-				ownerCount++
-			case "editor":
-				editorCount++
-			case "viewer":
-				viewerCount++
-			}
-		}
-		fmt.Printf("  Users: %s total", ui.HighlightStyle.Render(fmt.Sprintf("%d", len(cfg.Metadata.Users))))
-		if len(cfg.Metadata.Users) > 0 {
-			fmt.Printf(" (%d owner, %d editor, %d viewer)", ownerCount, editorCount, viewerCount)
-		}
-		fmt.Println()
-		fmt.Println()
+		ownerCount, editorCount, viewerCount := countUsersByRole(cfg.Metadata.Users)
+		userLabel := fmt.Sprintf("[U] Users: %s total (%d own, %d ed, %d view)",
+			ui.HighlightStyle.Render(fmt.Sprintf("%d", len(cfg.Metadata.Users))),
+			ownerCount, editorCount, viewerCount)
+		lines = append(lines, userLabel)
 	}
 
-	fmt.Printf("  Repository:    %s\n", cfg.Repo)
-	fmt.Printf("  Last Sync:     %s\n", ui.HighlightStyle.Render(formatTime(lastSync)))
-	fmt.Printf("  Last Updated:  %s\n", ui.HighlightStyle.Render(formatTime(cfg.UpdatedAt)))
-	fmt.Printf("  Created:       %s\n", ui.HighlightStyle.Render(formatTime(cfg.CreatedAt)))
-	fmt.Println()
+	if cfg.IsLocalMode() {
+		lines = append(lines, fmt.Sprintf("[L] Vault:   %s", ui.HighlightStyle.Render("local")))
+		lines = append(lines, fmt.Sprintf("[R] Path:    %s", vaultPath))
+	} else {
+		lines = append(lines, fmt.Sprintf("[G] Vault:   %s", ui.HighlightStyle.Render("github")))
+		lines = append(lines, fmt.Sprintf("[R] Repo:    %s", cfg.Repo))
+	}
+
+	lines = append(lines, fmt.Sprintf("[<] Sync:    %s", ui.HighlightStyle.Render(formatTime(lastSync))))
+	lines = append(lines, fmt.Sprintf("[^] Updt:    %s", ui.HighlightStyle.Render(formatTime(cfg.UpdatedAt))))
+	lines = append(lines, fmt.Sprintf("[+] Created: %s", ui.HighlightStyle.Render(formatTime(cfg.CreatedAt))))
+
+	return lines
+}
+
+func countUsersByRole(users []config.UserEntry) (owners, editors, viewers int) {
+	for _, u := range users {
+		switch u.Role {
+		case "owner":
+			owners++
+		case "editor":
+			editors++
+		case "viewer":
+			viewers++
+		}
+	}
+	return
+}
+
+func renderPanel(title string, lines []string) {
+	maxLen := 0
+	for _, line := range lines {
+		if len(stripANSI(line)) > maxLen {
+			maxLen = len(stripANSI(line))
+		}
+	}
+
+	totalWidth := maxLen + 4
+
+	titleLen := len(title)
+	totalDashes := totalWidth - titleLen
+	leftDash := 1
+	rightDash := totalDashes - leftDash
+
+	fmt.Printf("┌%s%s%s┐\n", strings.Repeat("─", leftDash), title, strings.Repeat("─", rightDash))
+	for _, line := range lines {
+		fmt.Printf("  %s\n", line)
+	}
+	fmt.Printf("└%s┘\n", strings.Repeat("─", totalWidth))
 }
 
 func formatSize(bytes int64) string {
-	const (
-		B  = 1
-		KB = 1024 * B
-		MB = 1024 * KB
-	)
+	const B = 1
+	const KB = 1024 * B
+	const MB = 1024 * KB
 	switch {
 	case bytes < KB:
 		return fmt.Sprintf("%dB", bytes)
@@ -147,7 +184,7 @@ func formatSize(bytes int64) string {
 
 func formatTime(t time.Time) string {
 	if t.IsZero() {
-		return "never"
+		return "not synced"
 	}
 	duration := time.Since(t)
 	if duration < time.Minute {
@@ -174,4 +211,19 @@ func formatTime(t time.Time) string {
 		return fmt.Sprintf("%d weeks ago", weeks)
 	}
 	return t.Format("2006-01-02")
+}
+
+func stripANSI(s string) string {
+	var result strings.Builder
+	inANSI := false
+	for _, c := range s {
+		if c == '\x1b' {
+			inANSI = true
+		} else if c == 'm' && inANSI {
+			inANSI = false
+		} else if !inANSI {
+			result.WriteRune(c)
+		}
+	}
+	return result.String()
 }

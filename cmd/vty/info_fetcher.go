@@ -364,6 +364,6 @@ func runInfoLocal(_ *cobra.Command, _ []string, cfg *config.Config, s storage.St
 		MasterKey: nil,
 	}
 
-	renderDetailedVaultInfo(cfg, sess, secrets, sshKeys, cfg.UpdatedAt)
+	renderDetailedVaultInfo(cfg, sess, secrets, sshKeys, cfg.UpdatedAt, cfg.LocalVaultPath)
 	return nil
 }

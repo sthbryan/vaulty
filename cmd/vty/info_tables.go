@@ -33,41 +33,48 @@ func renderSecretsTable(secrets []models.SecretInfo) {
 	t := table.New().
 		Border(lipgloss.NormalBorder()).
 		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-		Headers("NAME", "TYPE", "ENV", "TAG", "SIZE", "UPDATED")
+		Headers("NAME", "TYPE", "ENVIRONMENT", "SIZE", "UPDATED")
 
 	for _, secret := range secrets {
 		env := secret.Environment
-		tag := "-"
+		typeColor := lipgloss.Color("white")
 
 		switch secret.Type {
 		case models.SecretTypeEnv:
+			typeColor = lipgloss.Color("76")
 			if env == "" {
 				env = "shared"
 			}
-		case models.SecretTypeResource, models.SecretTypeConfig:
-			if env != "" && env != "config" && env != "resources" {
-				tag = env
-				env = "-"
-			} else {
-				env = "-"
-				tag = "-"
-			}
+			env = envBadge(env)
+		case models.SecretTypeResource:
+			typeColor = lipgloss.Color("75")
+			env = "-"
+		case models.SecretTypeConfig:
+			typeColor = lipgloss.Color("220")
+			env = "-"
 		default:
 			env = "-"
-			tag = "-"
 		}
 
 		t.Row(
 			secret.Name,
-			string(secret.Type),
+			lipgloss.NewStyle().Foreground(typeColor).Render(string(secret.Type)),
 			env,
-			tag,
 			formatSize(secret.Size),
 			formatTime(secret.UpdatedAt),
 		)
 	}
 
 	fmt.Println(t.Render())
+}
+
+func envBadge(env string) string {
+	switch env {
+	case "shared":
+		return "[*] shared"
+	default:
+		return "[@] " + env
+	}
 }
 
 func renderSSHKeysTable(keys []github.SSHKeyInfo, role string) {
