@@ -180,7 +180,6 @@ func prepareResourceFile(path, name string, secretType models.SecretType, isDire
 	compressedSize := int64(len(compressed))
 	ui.PrintStats("Compressed size: %s (%.1f%% reduction)",
 		ui.FormatBytes(compressedSize),
-		ui.FormatBytes(originalSize),
 		float64(originalSize-compressedSize)/float64(originalSize)*100)
 
 	hash := sha256.Sum256(originalData)
