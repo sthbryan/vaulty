@@ -37,6 +37,7 @@ func init() {
 		&cobra.Group{ID: "vault", Title: "Vault Operations"},
 		&cobra.Group{ID: "config", Title: "Configuration"},
 		&cobra.Group{ID: "account", Title: "Account"},
+		&cobra.Group{ID: "system", Title: "System"},
 		&cobra.Group{ID: "team", Title: "Team Management (owner only)"},
 	)
 
@@ -57,6 +58,8 @@ func init() {
 	initCmd.GroupID = "account"
 	linkCmd.GroupID = "account"
 	unlinkCmd.GroupID = "account"
+
+	updateCmd.GroupID = "system"
 
 	addUserCmd.GroupID = "team"
 	removeUserCmd.GroupID = "team"
