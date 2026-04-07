@@ -32,7 +32,30 @@ Vaulty is a secure CLI tool for managing environment variables, SSH keys, and te
 
 ## Installation
 
-### From Releases (Recommended)
+### Quick Install (Recommended)
+
+```bash
+curl -sSL https://raw.githubusercontent.com/sthbryan/vaulty/main/install.sh | bash
+```
+
+This single command:
+- Detects your OS and architecture automatically
+- Downloads the latest release
+- Sets executable permissions
+- Installs to `~/.local/bin/vty`
+- Removes macOS quarantine (if needed)
+
+Add `~/.local/bin` to your PATH if needed:
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc  # or ~/.zshrc
+```
+
+Update Vaulty:
+```bash
+curl -sSL https://raw.githubusercontent.com/sthbryan/vaulty/main/install.sh | bash
+```
+
+### From Releases (Manual)
 
 Download the latest binary for your platform from the [releases page](https://github.com/sthbryan/vaulty/releases):
 
