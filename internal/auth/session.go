@@ -14,6 +14,7 @@ const (
 	SessionFileName = "session.yml"
 	VaultDirName    = ".vaulty"
 	ConfigFileName  = "config.yaml"
+	MetaFileName    = "vault.meta"
 )
 
 type SessionManager struct {
@@ -44,6 +45,10 @@ func (sm *SessionManager) GetSessionPath() string {
 
 func (sm *SessionManager) GetConfigPath() string {
 	return filepath.Join(sm.vaultDir, ConfigFileName)
+}
+
+func (sm *SessionManager) GetMetaPath() string {
+	return filepath.Join(sm.vaultDir, MetaFileName)
 }
 
 func (sm *SessionManager) LoadSession() (*models.Session, error) {
@@ -127,6 +132,41 @@ func (sm *SessionManager) SaveConfig(config *models.VaultConfig) error {
 
 	if err := os.WriteFile(configPath, data, 0600); err != nil {
 		return fmt.Errorf("writing config file: %w", err)
+	}
+
+	return nil
+}
+
+func (sm *SessionManager) LoadMeta() (*models.VaultMeta, error) {
+	metaPath := sm.GetMetaPath()
+
+	data, err := os.ReadFile(metaPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("vault meta not found")
+		}
+		return nil, fmt.Errorf("reading meta file: %w", err)
+	}
+
+	var meta models.VaultMeta
+	if err := yaml.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("parsing meta file: %w", err)
+	}
+
+	return &meta, nil
+}
+
+func (sm *SessionManager) SaveMeta(meta *models.VaultMeta) error {
+	metaPath := sm.GetMetaPath()
+
+
+	data, err := yaml.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("marshaling meta: %w", err)
+	}
+
+	if err := os.WriteFile(metaPath, data, 0600); err != nil {
+		return fmt.Errorf("writing meta file: %w", err)
 	}
 
 	return nil

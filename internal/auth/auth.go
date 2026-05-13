@@ -41,17 +41,27 @@ func (a *Auth) DeriveKey(password string, saltHex string) ([]byte, error) {
 	return key, nil
 }
 
-func (a *Auth) EncryptVaultKey(key []byte, password string) (string, string, error) {
-	encrypted, err := crypto.EncryptWithKey(key, []byte(password))
+func (a *Auth) EncryptVaultKey(vaultKey []byte, password string) (string, string, error) {
+
+	salt, err := crypto.GenerateSalt()
+	if err != nil {
+		return "", "", fmt.Errorf("generating salt: %w", err)
+	}
+
+	derivedKey, err := crypto.DeriveKey(password, salt)
+	if err != nil {
+		return "", "", fmt.Errorf("deriving key: %w", err)
+	}
+
+	encrypted, err := crypto.EncryptWithKey(vaultKey, derivedKey)
 	if err != nil {
 		return "", "", fmt.Errorf("encrypting vault key: %w", err)
 	}
 
-	salt := hex.EncodeToString(encrypted.Salt)
 	iv := hex.EncodeToString(encrypted.IV)
 	ciphertext := hex.EncodeToString(encrypted.Ciphertext)
 
-	return salt + ":" + iv + ":" + ciphertext, salt, nil
+	return hex.EncodeToString(salt) + ":" + iv + ":" + ciphertext, hex.EncodeToString(salt), nil
 }
 
 func (a *Auth) DecryptVaultKey(encryptedKeyHex string, password string) ([]byte, error) {
@@ -60,22 +70,37 @@ func (a *Auth) DecryptVaultKey(encryptedKeyHex string, password string) ([]byte,
 		return nil, fmt.Errorf("invalid encrypted key format")
 	}
 
-	salt, _ := hex.DecodeString(parts[0])
-	iv, _ := hex.DecodeString(parts[1])
-	ciphertext, _ := hex.DecodeString(parts[2])
+	salt, err := hex.DecodeString(parts[0])
+	if err != nil {
+		return nil, fmt.Errorf("decoding salt: %w", err)
+	}
+
+	iv, err := hex.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("decoding iv: %w", err)
+	}
+
+	ciphertext, err := hex.DecodeString(parts[2])
+	if err != nil {
+		return nil, fmt.Errorf("decoding ciphertext: %w", err)
+	}
+
+	derivedKey, err := crypto.DeriveKey(password, salt)
+	if err != nil {
+		return nil, fmt.Errorf("deriving key: %w", err)
+	}
 
 	encryptedData := &crypto.EncryptedData{
-		Salt:       salt,
 		IV:         iv,
 		Ciphertext: ciphertext,
 	}
 
-	key, err := crypto.DecryptWithKey(encryptedData, []byte(password))
+	vaultKey, err := crypto.DecryptWithKey(encryptedData, derivedKey)
 	if err != nil {
 		return nil, fmt.Errorf("decrypting vault key: %w", err)
 	}
 
-	return key, nil
+	return vaultKey, nil
 }
 
 func (a *Auth) ValidatePassword(password string) error {
