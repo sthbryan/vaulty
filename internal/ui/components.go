@@ -2,6 +2,8 @@ package ui
 
 import (
 	"fmt"
+	"os/exec"
+	"strings"
 
 	"charm.land/huh/v2"
 )
@@ -62,12 +64,16 @@ func Password(title, placeholder string) (string, error) {
 
 func Confirm(title string) (bool, error) {
 	var value bool
-	step := huh.NewConfirm().
+	selector := huh.NewSelect[bool]().
 		Title(title).
+		Options(
+			huh.NewOption("Yes", true),
+			huh.NewOption("No", false),
+		).
 		Value(&value).
 		WithTheme(Theme)
 
-	if err := step.Run(); err != nil {
+	if err := selector.Run(); err != nil {
 		return false, err
 	}
 	return value, nil
@@ -112,9 +118,13 @@ func PasswordGroup(title, key, placeholder string, value *string) *huh.Group {
 
 func ConfirmGroup(title, key string, value *bool) *huh.Group {
 	return huh.NewGroup(
-		huh.NewConfirm().
+		huh.NewSelect[bool]().
 			Title(title).
 			Key(key).
+			Options(
+				huh.NewOption("Yes", true),
+				huh.NewOption("No", false),
+			).
 			Value(value),
 	)
 }
@@ -142,4 +152,13 @@ func ValidatePassword(password string) error {
 		return fmt.Errorf("password must be at least 8 characters")
 	}
 	return nil
+}
+
+func GetGitHubTokenCLI() (string, error) {
+	cmd := exec.Command("gh", "auth", "token")
+	output, err := cmd.Output()
+	if err != nil || len(output) == 0 {
+		return "", fmt.Errorf("GitHub CLI not available")
+	}
+	return strings.TrimSpace(string(output)), nil
 }

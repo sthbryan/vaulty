@@ -1,38 +1,93 @@
 package ui
 
-import "charm.land/huh/v2"
+import (
+	"os/user"
 
-type WizardState struct {
-	StorageType     string
-	Username        string
-	VaultID         string
-	Password        string
-	ConfirmPassword string
+	"charm.land/huh/v2"
+)
+
+// --- Detect ---
+
+type DetectState struct {
+	Username string
+	VaultID  string
 }
 
-type Wizard struct {
-	state *WizardState
-}
+func Detect() (*DetectState, error) {
+	state := &DetectState{}
 
-func NewWizard() *Wizard {
-	return &Wizard{state: &WizardState{}}
-}
+	currentUser, _ := user.Current()
+	usernamePlaceholder := ""
+	if currentUser != nil {
+		usernamePlaceholder = currentUser.Username
+	}
 
-func (w *Wizard) Run() (*WizardState, error) {
 	form := huh.NewForm(
-		SelectGroup("Select storage type", "storage", []SelectOption{
-			{ID: "github", Label: "GitHub (encrypted, synced)"},
-			{ID: "local", Label: "Local (encrypted, your machine)"},
-		}, &w.state.StorageType),
-		InputGroup("Username", "username", "your-username", &w.state.Username),
-		InputGroup("Vault name", "vault", "my-vault", &w.state.VaultID),
-		PasswordGroup("Master password (min 8 chars)", "password", "••••••••", &w.state.Password),
-		PasswordGroup("Confirm password", "confirm", "••••••••", &w.state.ConfirmPassword),
+		InputGroup("Username", "username", usernamePlaceholder, &state.Username),
+		InputGroup("Vault name", "vault", "my-vault", &state.VaultID),
 	).WithTheme(Theme)
 
 	if err := form.Run(); err != nil {
 		return nil, err
 	}
 
-	return w.state, nil
+	if state.VaultID == "" {
+		state.VaultID = "my-vault"
+	}
+	if state.Username == "" && currentUser != nil {
+		state.Username = currentUser.Username
+	}
+
+	return state, nil
+}
+
+// --- Identify ---
+
+type IdentifyState struct {
+	StorageType string
+}
+
+func Identify() (*IdentifyState, error) {
+	state := &IdentifyState{}
+
+	form := huh.NewForm(
+		SelectGroup("Select storage type", "storage", []SelectOption{
+			{ID: "github", Label: "GitHub (encrypted, synced)"},
+			{ID: "local", Label: "Local (encrypted, your machine)"},
+		}, &state.StorageType),
+	).WithTheme(Theme)
+
+	if err := form.Run(); err != nil {
+		return nil, err
+	}
+
+	return state, nil
+}
+
+// --- Create ---
+
+type CreateState struct {
+	Password        string
+	ConfirmPassword string
+}
+
+type Create struct {
+	state *CreateState
+}
+
+func NewCreate() *Create {
+	return &Create{state: &CreateState{}}
+}
+
+func (c *Create) Run() (*CreateState, error) {
+	form := huh.NewForm(
+		PasswordGroup("Master password (min 8 chars)", "password", "••••••••", &c.state.Password),
+		PasswordGroup("Confirm password", "confirm", "••••••••", &c.state.ConfirmPassword),
+	).WithTheme(Theme)
+
+	if err := form.Run(); err != nil {
+		return nil, err
+	}
+
+	return c.state, nil
 }
