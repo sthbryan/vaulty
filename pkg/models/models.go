@@ -3,12 +3,17 @@ package models
 import "time"
 
 type VaultConfig struct {
-	StorageType  string    `yaml:"storage_type"`
-	StoragePath  string    `yaml:"storage_path"`
-	EncryptedKey string    `yaml:"encrypted_key"`
+	StorageType string    `yaml:"storage_type"`
+	StoragePath string    `yaml:"storage_path"`
+	Username    string    `yaml:"username"`
+	VaultID     string    `yaml:"vault_id"`
+	CreatedAt   time.Time `yaml:"created_at"`
+	UpdatedAt   time.Time `yaml:"updated_at"`
+}
+
+type VaultMeta struct {
 	Salt         string    `yaml:"salt"`
-	Username     string    `yaml:"username"`
-	VaultID      string    `yaml:"vault_id"`
+	EncryptedKey string    `yaml:"encrypted_key"`
 	CreatedAt    time.Time `yaml:"created_at"`
 	UpdatedAt    time.Time `yaml:"updated_at"`
 }
@@ -18,6 +23,10 @@ type Session struct {
 	VaultID     string    `yaml:"vault_id"`
 	StorageType string    `yaml:"storage_type"`
 	ExpiresAt   time.Time `yaml:"expires_at"`
+}
+
+func (s *Session) IsExpired() bool {
+	return time.Now().After(s.ExpiresAt)
 }
 
 type SecretMetadata struct {
