@@ -16,7 +16,7 @@ func LoadSession() (*models.Session, error) {
 }
 
 func CreateSession(username, vaultID, storageType string, hours int64) error {
-	return vault.CreateSession(username, vaultID, storageType, int(hours))
+	return vault.CreateSession(username, vaultID, storageType, hours)
 }
 
 func ExtendSession(session *models.Session, hours int) error {
