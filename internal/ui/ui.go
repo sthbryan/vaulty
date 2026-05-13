@@ -2,13 +2,55 @@ package ui
 
 import (
 	"fmt"
+	"time"
 
+	"charm.land/bubbles/v2/spinner"
 	"charm.land/huh/v2"
 )
 
 type SelectOption struct {
 	ID    string
 	Label string
+}
+
+type spinnerState struct {
+	s       spinner.Model
+	done    chan struct{}
+	running bool
+}
+
+func newSpinner() *spinnerState {
+	s := spinner.New(spinner.WithSpinner(spinner.Line))
+	return &spinnerState{s: s, done: make(chan struct{})}
+}
+
+func (sp *spinnerState) Start(msg string) {
+	sp.running = true
+	go func() {
+		for {
+			select {
+			case <-sp.done:
+				return
+			case <-time.After(100 * time.Millisecond):
+				sp.s, _ = sp.s.Update(spinner.TickMsg{})
+				fmt.Printf("\r%s %s", sp.s.View(), InfoStyle.Render(msg))
+			}
+		}
+	}()
+}
+
+func (sp *spinnerState) Stop() {
+	if sp.running {
+		sp.done <- struct{}{}
+		sp.running = false
+		fmt.Printf("\r                    \r")
+	}
+}
+
+func PrintSpinner(msg string) func() {
+	sp := newSpinner()
+	sp.Start(msg)
+	return sp.Stop
 }
 
 func PromptPassword(title, placeholder string) (string, error) {
@@ -27,14 +69,20 @@ func PromptPassword(title, placeholder string) (string, error) {
 	return value, nil
 }
 
-func PromptInput(title, placeholder string) (string, error) {
+func PromptInput(title, placeholder, defaultValue string) (string, error) {
 	var value string
 	input := huh.NewInput().
 		Title(title).
 		Placeholder(placeholder).
 		Prompt("▶ ").
-		Value(&value).
-		WithTheme(theme())
+		Value(&value)
+
+	if defaultValue != "" {
+		value = defaultValue
+		input.Placeholder(defaultValue)
+	}
+
+	input.WithTheme(theme())
 
 	if err := input.Run(); err != nil {
 		return "", err
@@ -95,5 +143,5 @@ func PrintInfo(msg string) {
 }
 
 func PrintBold(msg string) {
-	fmt.Println(BoldStyle.Render("[>>] " + msg))
+	fmt.Println(BoldStyle.Render(msg))
 }
