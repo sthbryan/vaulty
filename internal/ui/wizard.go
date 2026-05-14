@@ -71,23 +71,17 @@ type CreateState struct {
 	ConfirmPassword string
 }
 
-type Create struct {
-	state *CreateState
-}
-
-func NewCreate() *Create {
-	return &Create{state: &CreateState{}}
-}
-
-func (c *Create) Run() (*CreateState, error) {
+func RunCreate() (*CreateState, error) {
+	state := &CreateState{}
 	form := huh.NewForm(
-		PasswordGroup("Master password (min 8 chars)", "password", "••••••••", &c.state.Password),
-		PasswordGroup("Confirm password", "confirm", "••••••••", &c.state.ConfirmPassword),
+		PasswordGroup("Master password (min 8 chars)", "password", "••••••••", &state.Password),
+		PasswordGroup("Confirm password", "confirm", "••••••••", &state.ConfirmPassword),
 	).WithTheme(Theme)
+
 
 	if err := form.Run(); err != nil {
 		return nil, err
 	}
 
-	return c.state, nil
+	return state, nil
 }
