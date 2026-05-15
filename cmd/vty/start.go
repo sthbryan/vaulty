@@ -115,14 +115,19 @@ func runLinkExisting(info vault.VaultInfo) error {
 	}
 
 	now := time.Now()
-	config := &models.VaultConfig{
-		Username:    info.Username,
-		VaultID:     info.VaultID,
-		StorageType: info.StorageType,
-		StoragePath: vault.StoragePath(info.Username, info.VaultID),
-		CreatedAt:   now,
-		UpdatedAt:   now,
+	config, err := vault.LoadConfig()
+	if err != nil {
+		config = &models.VaultConfig{}
 	}
+
+	config.Username = info.Username
+	config.VaultID = info.VaultID
+	config.StorageType = info.StorageType
+	config.StoragePath = vault.StoragePath(info.Username, info.VaultID)
+	if config.CreatedAt.IsZero() {
+		config.CreatedAt = now
+	}
+	config.UpdatedAt = now
 
 	if err := vault.SaveConfig(config); err != nil {
 		ui.PrintError(fmt.Sprintf("Failed to save config: %v", err))
