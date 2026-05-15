@@ -3,12 +3,19 @@ package models
 import "time"
 
 type VaultConfig struct {
-	StorageType string    `yaml:"storage_type"`
-	StoragePath string    `yaml:"storage_path"`
-	Username    string    `yaml:"username"`
-	VaultID     string    `yaml:"vault_id"`
-	CreatedAt   time.Time `yaml:"created_at"`
-	UpdatedAt   time.Time `yaml:"updated_at"`
+	Username    string       `yaml:"username"`
+	VaultID     string       `yaml:"vault_id"`
+	StorageType string       `yaml:"storage_type"`
+	StoragePath string       `yaml:"storage_path"`
+	Auth        AuthSettings `yaml:"auth"`
+	CreatedAt   time.Time    `yaml:"created_at"`
+	UpdatedAt   time.Time    `yaml:"updated_at"`
+}
+
+type AuthSettings struct {
+	Provider       string `yaml:"provider"`
+	Method         string `yaml:"method"`
+	EncryptedToken string `yaml:"encrypted_token"`
 }
 
 type VaultMeta struct {
