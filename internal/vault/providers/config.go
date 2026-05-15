@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/sthbryan/vaulty/v2/pkg/models"
 	"gopkg.in/yaml.v3"
@@ -50,19 +49,17 @@ func SaveConfig(config *models.VaultConfig) error {
 	return nil
 }
 
-func UpdateAuthSettings(provider, method, encryptedToken string) error {
+func UpdateAuthSettings(provider ProviderType, method, encryptedToken string) error {
 	config, err := LoadConfig()
 	if err != nil {
-
 		config = &models.VaultConfig{}
 	}
 
 	config.Auth = models.AuthSettings{
-		Provider:       provider,
+		Provider:       string(provider),
 		Method:         method,
 		EncryptedToken: encryptedToken,
 	}
-	config.UpdatedAt = time.Now()
 
 	return SaveConfig(config)
 }
