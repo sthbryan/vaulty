@@ -209,21 +209,17 @@ func CreateVault(info VaultInfoWithPassword) error {
 
 	switch info.StorageType {
 	case "github":
-		token, authMethod, err := providers.GetTokenWithAuth()
+		token, err := providers.GetTokenForProvider("github")
 		if err != nil {
-			return fmt.Errorf("Wizard cancelled")
-		}
-
-		if err := providers.UpdateAuthSettings(providers.ProviderGitHub, authMethod, ""); err != nil {
-			ui.PrintError(fmt.Sprintf("Failed to save auth config: %v", err))
+			return fmt.Errorf("wizard cancelled")
 		}
 		p := providers.NewProvider(providers.ProviderGitHub, token, info.Username, info.VaultID)
 		if err := p.SaveMeta(meta); err != nil {
-			return fmt.Errorf("Saving meta to GitHub: %w", err)
+			return fmt.Errorf("saving meta to GitHub: %w", err)
 		}
 	case "local":
 		if err := SaveMeta(meta); err != nil {
-			return fmt.Errorf("Saving meta: %w", err)
+			return fmt.Errorf("saving meta: %w", err)
 		}
 	default:
 		return fmt.Errorf("Unsupported storage type: %s", info.StorageType)
@@ -249,9 +245,9 @@ func NewProvider(providerType providers.ProviderType, params ...string) provider
 func SetupStorage(info VaultInfo) error {
 	switch info.StorageType {
 	case "github":
-		token, err := providers.GetToken()
+		token, err := providers.GetTokenForProvider("github")
 		if err != nil {
-			return fmt.Errorf("Wizard cancelled")
+			return fmt.Errorf("wizard cancelled")
 		}
 
 		ui.PrintInfo("Setting up GitHub storage...")
@@ -345,9 +341,9 @@ func CheckVaultAvailability(info VaultInfo) (bool, error) {
 
 	switch info.StorageType {
 	case "github":
-		token, _, err := providers.GetTokenWithAuth()
+		token, err := providers.GetTokenForProvider("github")
 		if err != nil {
-			return false, fmt.Errorf("Wizard cancelled")
+			return false, fmt.Errorf("wizard cancelled")
 		}
 		provider = providers.NewProvider(providers.ProviderGitHub, token, info.Username, info.VaultID)
 	case "local":
