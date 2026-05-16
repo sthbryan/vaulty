@@ -26,7 +26,7 @@ type VaultInfoWithPassword struct {
 	Password string
 }
 
-const vaultDir = ".vaulty"
+var vaultDir = ".vaulty"
 
 func VaultDir() string {
 	home, _ := os.UserHomeDir()

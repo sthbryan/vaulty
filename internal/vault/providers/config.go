@@ -11,7 +11,7 @@ import (
 
 const vaultDir = ".vaulty"
 
-func configPath() string {
+var configPath func() string = func() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, vaultDir, "config.yaml")
 }

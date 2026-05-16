@@ -105,7 +105,6 @@ func TestSessionManager_SessionExpired(t *testing.T) {
 func TestSessionManager_VaultExists(t *testing.T) {
 	sm, _ := NewSessionManager()
 
-	// Save a config
 	config := &models.VaultConfig{
 		StorageType: "local",
 		StoragePath: "/tmp/test",
@@ -118,7 +117,6 @@ func TestSessionManager_VaultExists(t *testing.T) {
 		t.Error("VaultExists() = false, want true (config exists)")
 	}
 
-	// Verify we can load it
 	loadedConfig, err := sm.LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
@@ -127,7 +125,6 @@ func TestSessionManager_VaultExists(t *testing.T) {
 		t.Errorf("StorageType = %s, want local", loadedConfig.StorageType)
 	}
 
-	// Clean up
 	os.Remove(sm.GetConfigPath())
 }
 

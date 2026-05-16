@@ -20,7 +20,15 @@ func NewTokenManager(provider string) *TokenManager {
 	return &TokenManager{provider: provider}
 }
 
+var (
+	uiSelect   = ui.Select
+	uiPassword = ui.Password
+)
+
 func GetTokenForProvider(provider string) (string, error) {
+	if provider == "local" {
+		return "", nil
+	}
 	return NewTokenManager(provider).GetToken()
 }
 
@@ -38,7 +46,7 @@ func (tm *TokenManager) GetToken() (string, error) {
 		ui.PrintInfo("Please re-authenticate...")
 	}
 
-	method, err = ui.Select(tm.providerTitle()+" authentication method", []ui.SelectOption{
+	method, err = uiSelect(tm.providerTitle()+" authentication method", []ui.SelectOption{
 		{ID: "cli", Label: tm.providerTitle() + " CLI - recommended"},
 		{ID: "env", Label: tm.providerEnvVar() + " environment variable"},
 		{ID: "manual", Label: "Enter token manually (will be saved encrypted)"},
@@ -119,7 +127,7 @@ func (tm *TokenManager) getTokenFromEnv() (string, error) {
 }
 
 func (tm *TokenManager) saveNewToken() (string, error) {
-	token, err := ui.Password(tm.providerTitle()+" personal access token", "ghp_••••••••")
+	token, err := uiPassword(tm.providerTitle()+" personal access token", "ghp_••••••••")
 	if err != nil {
 		return "", fmt.Errorf("Cancelled")
 	}
@@ -133,7 +141,7 @@ func (tm *TokenManager) saveNewToken() (string, error) {
 }
 
 func (tm *TokenManager) decryptToken(encryptedToken string) (string, error) {
-	password, err := ui.Password("Master password to decrypt saved token", "••••••••")
+	password, err := uiPassword("Master password to decrypt saved token", "••••••••")
 	if err != nil {
 		return "", fmt.Errorf("Cancelled")
 	}
@@ -183,7 +191,7 @@ func (tm *TokenManager) decryptToken(encryptedToken string) (string, error) {
 }
 
 func (tm *TokenManager) encryptTokenForManual(token string) (string, error) {
-	password, err := ui.Password("Master password for encrypting token", "••••••••")
+	password, err := uiPassword("Master password for encrypting token", "••••••••")
 	if err != nil {
 		return "", fmt.Errorf("Cancelled")
 	}
