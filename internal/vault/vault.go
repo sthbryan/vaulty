@@ -53,12 +53,12 @@ func ConfigExists() bool {
 func LoadConfig() (*models.VaultConfig, error) {
 	data, err := os.ReadFile(ConfigPath())
 	if err != nil {
-		return nil, fmt.Errorf("Reading config: %w", err)
+		return nil, fmt.Errorf("reading config: %w", err)
 	}
 
 	var config models.VaultConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("Parsing config: %w", err)
+		return nil, fmt.Errorf("parsing config: %w", err)
 	}
 
 	return &config, nil
@@ -67,15 +67,15 @@ func LoadConfig() (*models.VaultConfig, error) {
 func SaveConfig(config *models.VaultConfig) error {
 	data, err := yaml.Marshal(config)
 	if err != nil {
-		return fmt.Errorf("Marshaling config: %w", err)
+		return fmt.Errorf("marshaling config: %w", err)
 	}
 
 	if err := os.MkdirAll(VaultDir(), 0700); err != nil {
-		return fmt.Errorf("Creating vault dir: %w", err)
+		return fmt.Errorf("creating vault dir: %w", err)
 	}
 
 	if err := os.WriteFile(ConfigPath(), data, 0600); err != nil {
-		return fmt.Errorf("Writing config: %w", err)
+		return fmt.Errorf("writing config: %w", err)
 	}
 
 	return nil
@@ -89,12 +89,12 @@ func SessionExists() bool {
 func LoadSession() (*models.Session, error) {
 	data, err := os.ReadFile(SessionPath())
 	if err != nil {
-		return nil, fmt.Errorf("Reading session: %w", err)
+		return nil, fmt.Errorf("reading session: %w", err)
 	}
 
 	var session models.Session
 	if err := yaml.Unmarshal(data, &session); err != nil {
-		return nil, fmt.Errorf("Parsing session: %w", err)
+		return nil, fmt.Errorf("parsing session: %w", err)
 	}
 
 	return &session, nil
@@ -103,15 +103,15 @@ func LoadSession() (*models.Session, error) {
 func SaveSession(session *models.Session) error {
 	data, err := yaml.Marshal(session)
 	if err != nil {
-		return fmt.Errorf("Marshaling session: %w", err)
+		return fmt.Errorf("marshaling session: %w", err)
 	}
 
 	if err := os.MkdirAll(VaultDir(), 0700); err != nil {
-		return fmt.Errorf("Creating vault dir: %w", err)
+		return fmt.Errorf("creating vault dir: %w", err)
 	}
 
 	if err := os.WriteFile(SessionPath(), data, 0600); err != nil {
-		return fmt.Errorf("Writing session: %w", err)
+		return fmt.Errorf("writing session: %w", err)
 	}
 
 	return nil
@@ -134,12 +134,12 @@ func CreateSession(username, vaultID, storageType string, hours int) error {
 func LoadMeta() (*models.VaultMeta, error) {
 	data, err := os.ReadFile(MetaPath())
 	if err != nil {
-		return nil, fmt.Errorf("Reading meta: %w", err)
+		return nil, fmt.Errorf("reading meta: %w", err)
 	}
 
 	var meta models.VaultMeta
 	if err := yaml.Unmarshal(data, &meta); err != nil {
-		return nil, fmt.Errorf("Parsing meta: %w", err)
+		return nil, fmt.Errorf("parsing meta: %w", err)
 	}
 
 	return &meta, nil
@@ -148,15 +148,15 @@ func LoadMeta() (*models.VaultMeta, error) {
 func SaveMeta(meta *models.VaultMeta) error {
 	data, err := yaml.Marshal(meta)
 	if err != nil {
-		return fmt.Errorf("Marshaling meta: %w", err)
+		return fmt.Errorf("marshaling meta: %w", err)
 	}
 
 	if err := os.MkdirAll(VaultDir(), 0700); err != nil {
-		return fmt.Errorf("Creating vault dir: %w", err)
+		return fmt.Errorf("creating vault dir: %w", err)
 	}
 
 	if err := os.WriteFile(MetaPath(), data, 0600); err != nil {
-		return fmt.Errorf("Writing meta: %w", err)
+		return fmt.Errorf("writing meta: %w", err)
 	}
 
 	return nil
@@ -172,17 +172,17 @@ func CreateVault(info VaultInfoWithPassword) error {
 
 	salt, err := authSvc.GenerateSalt()
 	if err != nil {
-		return fmt.Errorf("Generating salt: %w", err)
+		return fmt.Errorf("generating salt: %w", err)
 	}
 
 	vaultKey, err := authSvc.GenerateVaultKey()
 	if err != nil {
-		return fmt.Errorf("Generating vault key: %w", err)
+		return fmt.Errorf("generating vault key: %w", err)
 	}
 
 	encryptedKey, _, err := authSvc.EncryptVaultKey(vaultKey, info.Password)
 	if err != nil {
-		return fmt.Errorf("Encrypting vault key: %w", err)
+		return fmt.Errorf("encrypting vault key: %w", err)
 	}
 
 	now := time.Now()
@@ -197,7 +197,7 @@ func CreateVault(info VaultInfoWithPassword) error {
 	}
 
 	if err := SaveConfig(config); err != nil {
-		return fmt.Errorf("Saving config: %w", err)
+		return fmt.Errorf("saving config: %w", err)
 	}
 
 	meta := &models.VaultMeta{
@@ -222,7 +222,7 @@ func CreateVault(info VaultInfoWithPassword) error {
 			return fmt.Errorf("saving meta: %w", err)
 		}
 	default:
-		return fmt.Errorf("Unsupported storage type: %s", info.StorageType)
+		return fmt.Errorf("unsupported storage type: %s", info.StorageType)
 	}
 
 	return nil
@@ -255,7 +255,7 @@ func SetupStorage(info VaultInfo) error {
 		p := providers.NewProvider(providers.ProviderGitHub, token, info.Username, info.VaultID)
 		if p.CheckVault() {
 			stopSpinner()
-			return fmt.Errorf("Repository already exists")
+			return fmt.Errorf("repository already exists")
 		}
 		stopSpinner()
 
@@ -265,14 +265,14 @@ func SetupStorage(info VaultInfo) error {
 
 		ui.PrintInfo("Creating repository...")
 		if err := p.SetupStorage(); err != nil {
-			return fmt.Errorf("Failed to create repository: %w", err)
+			return fmt.Errorf("failed to create repository: %w", err)
 		}
 
 	case "local":
 		return nil
 
 	default:
-		return fmt.Errorf("Unsupported storage type: %s", info.StorageType)
+		return fmt.Errorf("unsupported storage type: %s", info.StorageType)
 	}
 
 	return nil
@@ -283,26 +283,26 @@ func LoadMetaFromStorage(info VaultInfo) (*models.VaultMeta, error) {
 	case "github":
 		token, err := providers.NewTokenManager("github").GetToken()
 		if err != nil {
-			return nil, fmt.Errorf("Wizard cancelled")
+			return nil, fmt.Errorf("wizard cancelled")
 		}
 		provider := providers.NewProvider(providers.ProviderGitHub, token, info.Username, info.VaultID)
 		return provider.LoadMeta()
 	case "local":
 		return LoadMeta()
 	default:
-		return nil, fmt.Errorf("Unsupported storage type: %s", info.StorageType)
+		return nil, fmt.Errorf("unsupported storage type: %s", info.StorageType)
 	}
 }
 
 func SaveMetaToRemote(providerType providers.ProviderType, meta *models.VaultMeta, params ...string) error {
 	provider := NewProvider(providerType, params...)
 	if provider == nil {
-		return fmt.Errorf("Unsupported provider: %s", providerType)
+		return fmt.Errorf("unsupported provider: %s", providerType)
 	}
 
 	data, err := yaml.Marshal(meta)
 	if err != nil {
-		return fmt.Errorf("Marshaling meta: %w", err)
+		return fmt.Errorf("marshaling meta: %w", err)
 	}
 
 	return provider.Upload(context.Background(), "vault.meta", data)
@@ -349,11 +349,11 @@ func CheckVaultAvailability(info VaultInfo) (bool, error) {
 	case "local":
 		provider = providers.NewProvider(providers.ProviderLocal, "", info.Username, info.VaultID)
 	default:
-		return false, fmt.Errorf("Unsupported storage type: %s", info.StorageType)
+		return false, fmt.Errorf("unsupported storage type: %s", info.StorageType)
 	}
 
 	if provider == nil {
-		return false, fmt.Errorf("Failed to create provider")
+		return false, fmt.Errorf("failed to create provider")
 	}
 
 	return provider.CheckVault(), nil

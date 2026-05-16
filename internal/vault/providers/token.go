@@ -82,11 +82,11 @@ func (tm *TokenManager) getTokenByMethod(method string, encryptedToken string) (
 		return tm.getTokenFromEnv()
 	case "manual":
 		if encryptedToken == "" {
-			return "", errors.New("No token saved, please provide master password")
+			return "", errors.New("no token saved, please provide master password")
 		}
 		return tm.decryptToken(encryptedToken)
 	default:
-		return "", fmt.Errorf("Unsupported auth method: %s", method)
+		return "", fmt.Errorf("unsupported auth method: %s", method)
 	}
 }
 
@@ -98,7 +98,7 @@ func (tm *TokenManager) getTokenFromCLI() (string, error) {
 	case "gitlab":
 		cmd = exec.Command("glab", "auth", "token")
 	default:
-		return "", fmt.Errorf("Unsupported provider: %s", tm.provider)
+		return "", fmt.Errorf("unsupported provider: %s", tm.provider)
 	}
 
 	output, err := cmd.Output()
@@ -116,7 +116,7 @@ func (tm *TokenManager) getTokenFromEnv() (string, error) {
 	case "gitlab":
 		envVar = "GLAB_TOKEN"
 	default:
-		return "", fmt.Errorf("Unsupported provider: %s", tm.provider)
+		return "", fmt.Errorf("unsupported provider: %s", tm.provider)
 	}
 
 	token := os.Getenv(envVar)
@@ -148,32 +148,32 @@ func (tm *TokenManager) decryptToken(encryptedToken string) (string, error) {
 
 	data, err := base64.StdEncoding.DecodeString(encryptedToken)
 	if err != nil {
-		return "", fmt.Errorf("Corrupted encrypted token: %w", err)
+		return "", fmt.Errorf("corrupted encrypted token: %w", err)
 	}
 
 	parts := strings.SplitN(string(data), ":", 3)
 	if len(parts) != 3 {
-		return "", errors.New("Invalid encrypted token format")
+		return "", errors.New("invalid encrypted token format")
 	}
 
 	salt, err := hexToBytes(parts[0])
 	if err != nil {
-		return "", fmt.Errorf("Invalid salt: %w", err)
+		return "", fmt.Errorf("invalid salt: %w", err)
 	}
 
 	iv, err := hexToBytes(parts[1])
 	if err != nil {
-		return "", fmt.Errorf("Invalid IV: %w", err)
+		return "", fmt.Errorf("invalid IV: %w", err)
 	}
 
 	ciphertext, err := hexToBytes(parts[2])
 	if err != nil {
-		return "", fmt.Errorf("Invalid ciphertext: %w", err)
+		return "", fmt.Errorf("invalid ciphertext: %w", err)
 	}
 
 	derivedKey, err := crypto.DeriveKey(password, salt)
 	if err != nil {
-		return "", fmt.Errorf("Key derivation failed: %w", err)
+		return "", fmt.Errorf("key derivation failed: %w", err)
 	}
 
 	encryptedData := &crypto.EncryptedData{
@@ -184,7 +184,7 @@ func (tm *TokenManager) decryptToken(encryptedToken string) (string, error) {
 
 	plaintext, err := crypto.DecryptWithKey(encryptedData, derivedKey)
 	if err != nil {
-		return "", errors.New("Invalid password or corrupted token")
+		return "", errors.New("invalid password or corrupted token")
 	}
 
 	return string(plaintext), nil
@@ -198,7 +198,7 @@ func (tm *TokenManager) encryptTokenForManual(token string) (string, error) {
 
 	encrypted, err := crypto.Encrypt([]byte(token), password)
 	if err != nil {
-		return "", fmt.Errorf("Encryption failed: %w", err)
+		return "", fmt.Errorf("encryption failed: %w", err)
 	}
 
 	format := fmt.Sprintf("%x:%x:%x", encrypted.Salt, encrypted.IV, encrypted.Ciphertext)
@@ -238,7 +238,7 @@ func hexToBytes(s string) ([]byte, error) {
 	var result []byte
 	for i := 0; i < len(s); i += 2 {
 		if i+2 > len(s) {
-			return nil, errors.New("Invalid hex length")
+			return nil, errors.New("invalid hex length")
 		}
 		var b byte
 		for _, c := range s[i : i+2] {
@@ -252,7 +252,7 @@ func hexToBytes(s string) ([]byte, error) {
 			case cc >= 'A' && cc <= 'F':
 				b |= cc - 'A' + 10
 			default:
-				return nil, errors.New("Invalid hex character")
+				return nil, errors.New("invalid hex character")
 			}
 		}
 		result = append(result, b)

@@ -61,7 +61,7 @@ func (p *GitHubProvider) Ping(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("verifying repository: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("repository not found or inaccessible")
 	}
@@ -89,7 +89,7 @@ func (p *GitHubProvider) Upload(ctx context.Context, path string, data []byte) e
 	if err != nil {
 		return fmt.Errorf("uploading file: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -106,7 +106,7 @@ func (p *GitHubProvider) Download(ctx context.Context, path string) ([]byte, err
 	if err != nil {
 		return nil, fmt.Errorf("getting file: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("file not found: %s", path)
@@ -130,7 +130,7 @@ func (p *GitHubProvider) Download(ctx context.Context, path string) ([]byte, err
 		if err != nil {
 			return nil, fmt.Errorf("downloading file: %w", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		return io.ReadAll(resp.Body)
 	}
 
@@ -156,7 +156,7 @@ func (p *GitHubProvider) Delete(ctx context.Context, path string) error {
 	if err != nil {
 		return fmt.Errorf("deleting file: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -173,7 +173,7 @@ func (p *GitHubProvider) List(ctx context.Context, prefix string) ([]string, err
 	if err != nil {
 		return nil, fmt.Errorf("listing contents: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, nil
@@ -218,7 +218,7 @@ func (p *GitHubProvider) CreateRepo(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("creating repository: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -235,7 +235,7 @@ func (p *GitHubProvider) getFileSHA(ctx context.Context, path string) (string, e
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return "", fmt.Errorf("file not found")

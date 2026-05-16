@@ -32,10 +32,10 @@ func (p *LocalProvider) Ping(ctx context.Context) error {
 		if os.IsNotExist(err) {
 			return os.MkdirAll(p.baseURL, 0700)
 		}
-		return fmt.Errorf("Accessing path: %w", err)
+		return fmt.Errorf("accessing path: %w", err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("Path is not a directory")
+		return fmt.Errorf("path is not a directory")
 	}
 	return nil
 }
@@ -45,11 +45,11 @@ func (p *LocalProvider) Upload(ctx context.Context, path string, data []byte) er
 
 	dir := filepath.Dir(fullPath)
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("Creating directory: %w", err)
+		return fmt.Errorf("creating directory: %w", err)
 	}
 
 	if err := os.WriteFile(fullPath, data, 0600); err != nil {
-		return fmt.Errorf("Writing file: %w", err)
+		return fmt.Errorf("writing file: %w", err)
 	}
 
 	return nil
@@ -61,9 +61,9 @@ func (p *LocalProvider) Download(ctx context.Context, path string) ([]byte, erro
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("File not found: %s", path)
+			return nil, fmt.Errorf("file not found: %s", path)
 		}
-		return nil, fmt.Errorf("Reading file: %w", err)
+		return nil, fmt.Errorf("reading file: %w", err)
 	}
 
 	return data, nil
@@ -74,9 +74,9 @@ func (p *LocalProvider) Delete(ctx context.Context, path string) error {
 
 	if err := os.Remove(fullPath); err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("File not found: %s", path)
+			return fmt.Errorf("file not found: %s", path)
 		}
-		return fmt.Errorf("Removing file: %w", err)
+		return fmt.Errorf("removing file: %w", err)
 	}
 
 	return nil
@@ -90,7 +90,7 @@ func (p *LocalProvider) List(ctx context.Context, prefix string) ([]string, erro
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("Accessing path: %w", err)
+		return nil, fmt.Errorf("accessing path: %w", err)
 	}
 
 	if !info.IsDir() {
@@ -99,7 +99,7 @@ func (p *LocalProvider) List(ctx context.Context, prefix string) ([]string, erro
 
 	entries, err := os.ReadDir(fullPath)
 	if err != nil {
-		return nil, fmt.Errorf("Reading directory: %w", err)
+		return nil, fmt.Errorf("reading directory: %w", err)
 	}
 
 	var files []string
@@ -119,7 +119,7 @@ func (p *LocalProvider) Exists(ctx context.Context, path string) (bool, error) {
 		if os.IsNotExist(err) {
 			return false, nil
 		}
-		return false, fmt.Errorf("Checking path: %w", err)
+		return false, fmt.Errorf("checking path: %w", err)
 	}
 	return true, nil
 }
@@ -135,7 +135,7 @@ func (p *LocalProvider) CheckVault() bool {
 
 func (p *LocalProvider) SetupStorage() error {
 	if p.CheckVault() {
-		return fmt.Errorf("Vault directory already exists")
+		return fmt.Errorf("vault directory already exists")
 	}
 	return p.CreateRepo(context.Background())
 }
@@ -143,12 +143,12 @@ func (p *LocalProvider) SetupStorage() error {
 func (p *LocalProvider) LoadMeta() (*models.VaultMeta, error) {
 	data, err := p.Download(context.Background(), "vault.meta")
 	if err != nil {
-		return nil, fmt.Errorf("Downloading vault.meta: %w", err)
+		return nil, fmt.Errorf("downloading vault.meta: %w", err)
 	}
 
 	var meta models.VaultMeta
 	if err := yaml.Unmarshal(data, &meta); err != nil {
-		return nil, fmt.Errorf("Parsing vault.meta: %w", err)
+		return nil, fmt.Errorf("parsing vault.meta: %w", err)
 	}
 
 	return &meta, nil
@@ -157,7 +157,7 @@ func (p *LocalProvider) LoadMeta() (*models.VaultMeta, error) {
 func (p *LocalProvider) SaveMeta(meta *models.VaultMeta) error {
 	data, err := yaml.Marshal(meta)
 	if err != nil {
-		return fmt.Errorf("Marshaling meta: %w", err)
+		return fmt.Errorf("marshaling meta: %w", err)
 	}
 
 	return p.Upload(context.Background(), "vault.meta", data)
