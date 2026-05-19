@@ -76,6 +76,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 
 	data, err := downloadFile(provider, storagePath+".vty")
 	if err != nil {
+		ui.PrintInfo("Encrypted not found, trying plain...")
 		data, err = downloadFile(provider, storagePath)
 		if err != nil {
 			ui.PrintError(fmt.Sprintf("File not found: %s", name))
@@ -85,6 +86,17 @@ func runPull(cmd *cobra.Command, args []string) error {
 				Hint:    "Use 'vty show' to check available secrets",
 			}
 		}
+	} else {
+		ui.PrintInfo("Found encrypted file")
+	}
+
+	ui.PrintInfo(fmt.Sprintf("Downloaded data size: %d bytes", len(data)))
+	if len(data) > 0 {
+		maxLen := 20
+		if len(data) < maxLen {
+			maxLen = len(data)
+		}
+		ui.PrintInfo(fmt.Sprintf("First bytes: %x", data[:maxLen]))
 	}
 
 	var secretFile *models.SecretFile
@@ -95,6 +107,8 @@ func runPull(cmd *cobra.Command, args []string) error {
 		isEncrypted = true
 		ui.PrintLock("Decrypted vault file")
 	} else {
+		ui.PrintInfo(fmt.Sprintf("Decryption failed: %v", err))
+		ui.PrintInfo("Treating as plain file")
 		secretFile = &models.SecretFile{
 			Metadata: models.SecretMetadata{
 				Name:  name,
@@ -104,7 +118,6 @@ func runPull(cmd *cobra.Command, args []string) error {
 			},
 			Data: data,
 		}
-		ui.PrintInfo("Downloaded (unencrypted)")
 	}
 
 	outputPath := pullOutput
@@ -131,6 +144,16 @@ func runPull(cmd *cobra.Command, args []string) error {
 
 		ui.PrintSuccess(fmt.Sprintf("Downloaded to: %s/", dirPath))
 	} else {
+		ui.PrintInfo("Decompressing...")
+		decompressed, err := compress.Decompress(secretFile.Data)
+		if err != nil {
+			ui.PrintWarning(fmt.Sprintf("Decompression failed (might be plain): %v", err))
+			ui.PrintInfo("Writing as-is...")
+			decompressed = secretFile.Data
+		} else {
+			ui.PrintStats(fmt.Sprintf("Decompressed: %d -> %d bytes", len(secretFile.Data), len(decompressed)))
+		}
+
 		ui.PrintInfo(fmt.Sprintf("Writing: %s", outputPath))
 
 		dir := filepath.Dir(outputPath)
@@ -141,7 +164,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		if err := os.WriteFile(outputPath, secretFile.Data, 0644); err != nil {
+		if err := os.WriteFile(outputPath, decompressed, 0644); err != nil {
 			ui.PrintError(fmt.Sprintf("Failed to write file: %v", err))
 			return fmt.Errorf("failed to write file")
 		}
