@@ -16,6 +16,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type VaultError struct {
+	Message string
+	Hint    string
+}
+
+func (e *VaultError) Error() string {
+	return e.Message
+}
+
 type VaultInfo struct {
 	Username    string
 	VaultID     string
@@ -264,7 +273,10 @@ func NewProviderFromConfig() providers.StorageProvider {
 
 func RequireSession() (*models.Session, error) {
 	if !SessionExists() {
-		return nil, fmt.Errorf("no active session. Run 'vty login' first")
+		return nil, &VaultError{
+			Message: "no active session",
+			Hint:    "Run 'vty login' to unlock the vault",
+		}
 	}
 
 	session, err := LoadSession()
@@ -273,7 +285,10 @@ func RequireSession() (*models.Session, error) {
 	}
 
 	if session.IsExpired() {
-		return nil, fmt.Errorf("session expired. Run 'vty login' to unlock")
+		return nil, &VaultError{
+			Message: "session expired",
+			Hint:    "Run 'vty login' to unlock the vault",
+		}
 	}
 
 	return session, nil

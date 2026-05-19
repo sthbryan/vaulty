@@ -1,11 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/sthbryan/vaulty/v2/internal/ui"
 )
 
 var rootCmd = &cobra.Command{
@@ -18,7 +16,7 @@ var rootCmd = &cobra.Command{
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		ui.PrintError(fmt.Sprintf("Error: %v", err))
+		handleCommandError(err)
 		os.Exit(1)
 	}
 }

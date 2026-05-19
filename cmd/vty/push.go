@@ -24,15 +24,7 @@ var pushEnv string
 var pushEncrypt bool
 
 func runPush(cmd *cobra.Command, args []string) error {
-	if len(args) < 3 {
-		return fmt.Errorf("usage: vty push <type> <name> <path> [-e env] [--encrypt=false]")
-	}
-
 	secretType := models.SecretType(args[0])
-	if !secretType.IsValid() {
-		return fmt.Errorf("invalid type: %s. Valid types: env, config, ssh, resources", args[0])
-	}
-
 	name := args[1]
 	path := args[2]
 	env := pushEnv
@@ -57,7 +49,10 @@ func runPush(cmd *cobra.Command, args []string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("file not found: %s", path)
+			return &CommandError{
+				Message: fmt.Sprintf("file not found: %s", path),
+				Hint:    "Check that the file path exists",
+			}
 		}
 		return fmt.Errorf("cannot access path: %w", err)
 	}
@@ -76,12 +71,12 @@ func runPush(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	ui.PrintBold("-- Push secret --")
+	ui.PrintBold("-- PUSH --")
 	fmt.Println()
-	ui.PrintInfo(fmt.Sprintf("Type: %s", secretType))
-	ui.PrintInfo(fmt.Sprintf("Name: %s", name))
-	ui.PrintInfo(fmt.Sprintf("Env: %s", env))
-	ui.PrintInfo(fmt.Sprintf("Path: %s", path))
+	ui.PrintInfo(fmt.Sprintf("Type:    %s", secretType))
+	ui.PrintInfo(fmt.Sprintf("Name:    %s", name))
+	ui.PrintInfo(fmt.Sprintf("Env:     %s", env))
+	ui.PrintInfo(fmt.Sprintf("Path:    %s", path))
 	if !pushEncrypt {
 		ui.PrintWarning("WARNING: File will NOT be encrypted")
 	}
@@ -265,7 +260,26 @@ Examples:
   vty push ssh deploy id_rsa -f
   vty push config settings config.json
   vty push resources assets ./public --encrypt=false`,
-	Args: cobra.ExactArgs(3),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) < 3 {
+			return &CommandError{
+				Message: "requires 3 arguments: <type> <name> <path>",
+				Hint:    "Run 'vty push --help' for usage",
+			}
+		}
+		secretType := models.SecretType(args[0])
+		if !secretType.IsValid() {
+			return &CommandError{
+				Message: "invalid secret type: " + args[0],
+				Hint:    "Valid types: env, config, ssh, resources",
+				Examples: []string{
+					"vty push env api .env",
+					"vty push ssh deploy id_rsa",
+				},
+			}
+		}
+		return nil
+	},
 	RunE: runPush,
 }
 
