@@ -42,7 +42,7 @@ func TestCalculateDirSize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	tests := []struct {
 		name     string
@@ -105,7 +105,7 @@ func TestCalculateDirSize(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create test subdir: %v", err)
 			}
-			defer os.RemoveAll(testDir)
+			defer func() { _ = os.RemoveAll(testDir) }()
 
 			if err := tt.setup(testDir); err != nil {
 				t.Fatalf("Setup failed: %v", err)
@@ -278,7 +278,7 @@ func TestValidateEnvFile(t *testing.T) {
 				tmpDir, _ := os.MkdirTemp("", "vaulty-env-test-*")
 				path := filepath.Join(tmpDir, ".env")
 				content := "DATABASE_URL=postgres://localhost\nAPI_KEY=secret123\n"
-				os.WriteFile(path, []byte(content), 0644)
+				_ = os.WriteFile(path, []byte(content), 0644)
 				cleanup := func() { os.RemoveAll(tmpDir) }
 				return path, cleanup
 			},
@@ -290,7 +290,7 @@ func TestValidateEnvFile(t *testing.T) {
 				tmpDir, _ := os.MkdirTemp("", "vaulty-env-test-*")
 				path := filepath.Join(tmpDir, ".env")
 				content := "# This is a comment\nDATABASE_URL=postgres://localhost\n# Another comment\nAPI_KEY=secret123\n"
-				os.WriteFile(path, []byte(content), 0644)
+				_ = os.WriteFile(path, []byte(content), 0644)
 				cleanup := func() { os.RemoveAll(tmpDir) }
 				return path, cleanup
 			},
@@ -302,7 +302,7 @@ func TestValidateEnvFile(t *testing.T) {
 				tmpDir, _ := os.MkdirTemp("", "vaulty-env-test-*")
 				path := filepath.Join(tmpDir, "config")
 				content := "HOST=localhost\nPORT=5432\n"
-				os.WriteFile(path, []byte(content), 0644)
+				_ = os.WriteFile(path, []byte(content), 0644)
 				cleanup := func() { os.RemoveAll(tmpDir) }
 				return path, cleanup
 			},
@@ -314,7 +314,7 @@ func TestValidateEnvFile(t *testing.T) {
 				tmpDir, _ := os.MkdirTemp("", "vaulty-env-test-*")
 				path := filepath.Join(tmpDir, "random.txt")
 				content := "This is not a valid env file\nJust some random text\n"
-				os.WriteFile(path, []byte(content), 0644)
+				_ = os.WriteFile(path, []byte(content), 0644)
 				cleanup := func() { os.RemoveAll(tmpDir) }
 				return path, cleanup
 			},
@@ -337,7 +337,7 @@ func TestValidateEnvFile(t *testing.T) {
 				tmpDir, _ := os.MkdirTemp("", "vaulty-env-test-*")
 				path := filepath.Join(tmpDir, "comments.txt")
 				content := "# Just a comment\n# Another comment\n"
-				os.WriteFile(path, []byte(content), 0644)
+				_ = os.WriteFile(path, []byte(content), 0644)
 				cleanup := func() { os.RemoveAll(tmpDir) }
 				return path, cleanup
 			},
@@ -421,7 +421,7 @@ func TestValidateSSHFile(t *testing.T) {
 				tmpDir, _ := os.MkdirTemp("", "vaulty-ssh-test-*")
 				path := filepath.Join(tmpDir, "random")
 				content := "This is not an SSH key\nJust some random text\n"
-				os.WriteFile(path, []byte(content), 0644)
+				_ = os.WriteFile(path, []byte(content), 0644)
 				cleanup := func() { os.RemoveAll(tmpDir) }
 				return path, cleanup
 			},
@@ -445,7 +445,7 @@ func TestValidateSSHFile(t *testing.T) {
 				path := filepath.Join(tmpDir, "partial")
 				// Note: validateSSHFile only checks for -----BEGIN, not complete PEM format
 				content := "-----BEGIN OPENSSH PRIVATE KEY-----\npartial content without END marker\n"
-				os.WriteFile(path, []byte(content), 0644)
+				_ = os.WriteFile(path, []byte(content), 0644)
 				cleanup := func() { os.RemoveAll(tmpDir) }
 				return path, cleanup
 			},
