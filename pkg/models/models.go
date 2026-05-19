@@ -30,6 +30,7 @@ type Session struct {
 	VaultID     string    `yaml:"vault_id"`
 	StorageType string    `yaml:"storage_type"`
 	ExpiresAt   time.Time `yaml:"expires_at"`
+	MasterKey   string    `yaml:"master_key"`
 }
 
 func (s *Session) IsExpired() bool {

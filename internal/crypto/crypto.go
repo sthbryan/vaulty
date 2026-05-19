@@ -161,6 +161,42 @@ func Decrypt(data *EncryptedData, password string) ([]byte, error) {
 	return plaintext, nil
 }
 
+func HexEncode(data []byte) string {
+	const hexChars = "0123456789abcdef"
+	result := make([]byte, len(data)*2)
+	for i, b := range data {
+		result[i*2] = hexChars[b>>4]
+		result[i*2+1] = hexChars[b&0x0F]
+	}
+	return string(result)
+}
+
+func HexDecode(s string) ([]byte, error) {
+	if len(s)%2 != 0 {
+		return nil, errors.New("hex string must have even length")
+	}
+	result := make([]byte, len(s)/2)
+	for i := 0; i < len(s); i += 2 {
+		var b byte
+		for _, c := range s[i : i+2] {
+			cc := byte(c)
+			b <<= 4
+			switch {
+			case cc >= '0' && cc <= '9':
+				b |= cc - '0'
+			case cc >= 'a' && cc <= 'f':
+				b |= cc - 'a' + 10
+			case cc >= 'A' && cc <= 'F':
+				b |= cc - 'A' + 10
+			default:
+				return nil, errors.New("invalid hex character")
+			}
+		}
+		result[i/2] = b
+	}
+	return result, nil
+}
+
 func EncryptWithChunks(plaintext []byte, password string, chunkSize int) (*ChunkedEncryptedData, error) {
 	if chunkSize <= 0 {
 		chunkSize = DefaultChunkSize

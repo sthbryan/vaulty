@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sthbryan/vaulty/v2/internal/auth"
+	"github.com/sthbryan/vaulty/v2/internal/crypto"
 	"github.com/sthbryan/vaulty/v2/internal/ui"
 	"github.com/sthbryan/vaulty/v2/internal/vault/providers"
 	"github.com/sthbryan/vaulty/v2/pkg/models"
@@ -240,6 +241,60 @@ func NewProvider(providerType providers.ProviderType, params ...string) provider
 		}
 	}
 	return nil
+}
+
+func NewProviderFromConfig() providers.StorageProvider {
+	config, err := LoadConfig()
+	if err != nil {
+		return nil
+	}
+
+	switch config.StorageType {
+	case "github":
+		token, err := providers.GetTokenForProvider("github")
+		if err != nil {
+			return nil
+		}
+		return providers.NewProvider(providers.ProviderGitHub, token, config.Username, config.VaultID)
+	case "local":
+		return providers.NewProvider(providers.ProviderLocal, "", config.Username, config.VaultID)
+	}
+	return nil
+}
+
+func RequireSession() (*models.Session, error) {
+	if !SessionExists() {
+		return nil, fmt.Errorf("no active session. Run 'vty login' first")
+	}
+
+	session, err := LoadSession()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load session: %w", err)
+	}
+
+	if session.IsExpired() {
+		return nil, fmt.Errorf("session expired. Run 'vty login' to unlock")
+	}
+
+	return session, nil
+}
+
+func GetMasterKey(session *models.Session) ([]byte, error) {
+	if session.MasterKey == "" {
+		return nil, fmt.Errorf("master key not found in session")
+	}
+
+	key, err := crypto.HexDecode(session.MasterKey)
+	if err != nil {
+		return nil, fmt.Errorf("invalid master key format: %w", err)
+	}
+
+	return key, nil
+}
+
+func SetMasterKey(session *models.Session, masterKey []byte) error {
+	session.MasterKey = crypto.HexEncode(masterKey)
+	return SaveSession(session)
 }
 
 func SetupStorage(info VaultInfo) error {

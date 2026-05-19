@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/sthbryan/vaulty/v2/internal/auth"
+	"github.com/sthbryan/vaulty/v2/internal/crypto"
 	"github.com/sthbryan/vaulty/v2/internal/ui"
 	"github.com/sthbryan/vaulty/v2/internal/vault"
 	"github.com/sthbryan/vaulty/v2/internal/vault/providers"
@@ -130,7 +131,7 @@ func loginWithPassword(config *models.VaultConfig, meta *models.VaultMeta) error
 	}
 
 	authSvc := auth.New()
-	_, err = authSvc.DecryptVaultKey(meta.EncryptedKey, password)
+	masterKey, err := authSvc.DecryptVaultKey(meta.EncryptedKey, password)
 	if err != nil {
 		ui.PrintError("Invalid password")
 		return fmt.Errorf("invalid password")
@@ -145,6 +146,7 @@ func loginWithPassword(config *models.VaultConfig, meta *models.VaultMeta) error
 		VaultID:     config.VaultID,
 		StorageType: config.StorageType,
 		ExpiresAt:   time.Now().Add(time.Duration(hours) * time.Second),
+		MasterKey:   crypto.HexEncode(masterKey),
 	}
 
 	if err := vault.SaveSession(session); err != nil {

@@ -147,6 +147,31 @@ func PrintBold(msg string) {
 	fmt.Println(BoldStyle.Render(msg))
 }
 
+func PrintWarning(msg string) {
+	fmt.Println(WarningStyle.Render("[!!] " + msg))
+}
+
+func PrintStats(msg string) {
+	fmt.Println(MutedStyle.Render(msg))
+}
+
+func PrintLock(msg string) {
+	fmt.Println(ErrStyle.Render("[>>] " + msg))
+}
+
+func FormatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
 func ValidatePassword(password string) error {
 	if len(password) < 8 {
 		return fmt.Errorf("password must be at least 8 characters")
