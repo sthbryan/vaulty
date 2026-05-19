@@ -22,6 +22,7 @@ import (
 var pushForce bool
 var pushEnv string
 var pushEncrypt bool
+var pushYes bool
 
 func runPush(cmd *cobra.Command, args []string) error {
 	secretType := models.SecretType(args[0])
@@ -82,9 +83,11 @@ func runPush(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 
-	ok, err := ui.Confirm("Push to vault?")
-	if err != nil || !ok {
-		return fmt.Errorf("cancelled")
+	if !pushYes {
+		ok, err := ui.Confirm("Push to vault?")
+		if err != nil || !ok {
+			return fmt.Errorf("cancelled")
+		}
 	}
 
 	fmt.Println()
@@ -113,17 +116,8 @@ func runPush(cmd *cobra.Command, args []string) error {
 }
 
 func pushPrepareAndEncrypt(path, name, env string, isDir, encrypt bool, masterKey []byte, secretType models.SecretType) (string, []byte, error) {
-	ui.PrintInfo("Reading file...")
-
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to read file: %w", err)
-	}
-
-	originalSize := int64(len(content))
-	ui.PrintStats(fmt.Sprintf("Original size: %s", ui.FormatBytes(originalSize)))
-
 	var finalContent []byte
+	var originalSize int64
 
 	if isDir {
 		ui.PrintInfo("Compressing directory...")
@@ -133,8 +127,19 @@ func pushPrepareAndEncrypt(path, name, env string, isDir, encrypt bool, masterKe
 		}
 		finalContent = compressed
 		name = name + ".tar.gz"
+
+		originalSize = calculateDirSize(path)
+		ui.PrintStats(fmt.Sprintf("Original size: %s", ui.FormatBytes(originalSize)))
 		ui.PrintStats(fmt.Sprintf("Compressed: %s", ui.FormatBytes(int64(len(finalContent)))))
 	} else {
+		ui.PrintInfo("Reading file...")
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to read file: %w", err)
+		}
+		originalSize = int64(len(content))
+		ui.PrintStats(fmt.Sprintf("Original size: %s", ui.FormatBytes(originalSize)))
+
 		ui.PrintInfo("Compressing...")
 		compressed, err := compress.Compress(content)
 		if err != nil {
@@ -247,6 +252,23 @@ func validateSSHFile(path string) error {
 	return fmt.Errorf("file does not appear to be an SSH key (no -----BEGIN marker)")
 }
 
+func calculateDirSize(path string) int64 {
+	var total int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			total += info.Size()
+		}
+		return nil
+	})
+	if err != nil {
+		return 0
+	}
+	return total
+}
+
 // <--- Cobra --->
 
 var pushCmd = &cobra.Command{
@@ -287,5 +309,6 @@ func init() {
 	pushCmd.Flags().BoolVarP(&pushForce, "force", "f", false, "Overwrite existing file")
 	pushCmd.Flags().StringVarP(&pushEnv, "env", "e", "", "Environment (default: default)")
 	pushCmd.Flags().BoolVar(&pushEncrypt, "encrypt", true, "Encrypt the file (default: true)")
+	pushCmd.Flags().BoolVarP(&pushYes, "yes", "y", false, "Skip confirmation")
 	rootCmd.AddCommand(pushCmd)
 }
